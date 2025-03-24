@@ -1,17 +1,16 @@
 import React, { useState } from 'react';
 import { Outlet } from 'react-router-dom';
 import { useSelector } from 'react-redux';
-import { 
-  Box, 
-  CssBaseline, 
-  ThemeProvider 
+import {
+  Box,
+  CssBaseline,
+  ThemeProvider
 } from '@mui/material';
 
 import theme from '../../assets/styles/theme';
 import Header from './Header';
 import Sidebar from './Sidebar';
 import { selectIsLoggedIn } from '../../redux/features/authSlice';
-
 
 const drawerWidth = 250;
 
@@ -29,13 +28,13 @@ const MainLayout = () => {
       <Box sx={{ display: 'flex', height: '100vh' }}>
         {isLoggedIn && (
           <>
-            <Header 
-              sidebarOpen={sidebarOpen} 
+            <Header
+              sidebarOpen={sidebarOpen}
               toggleSidebar={toggleSidebar}
               drawerWidth={drawerWidth}
             />
-            <Sidebar 
-              open={sidebarOpen} 
+            <Sidebar
+              open={sidebarOpen}
               onClose={() => setSidebarOpen(false)}
               drawerWidth={drawerWidth}
             />
@@ -53,7 +52,7 @@ const MainLayout = () => {
               easing: theme.transitions.easing.sharp,
               duration: theme.transitions.duration.leavingScreen,
             }),
-            overflow: 'auto', 
+            overflow: 'auto',
           }}
         >
           <Outlet />

@@ -36,24 +36,24 @@ const stockSlice = createSlice({
     },
     addItem: (state, action) => {
       state.items.push(action.payload);
-      state.filteredItems = state.items; 
+      state.filteredItems = state.items;
     },
     updateItem: (state, action) => {
       const index = state.items.findIndex(item => item.id === action.payload.id);
       if (index !== -1) {
         state.items[index] = action.payload;
-        
+
         if (state.selectedItem && state.selectedItem.id === action.payload.id) {
           state.selectedItem = action.payload;
         }
-        
-        state.filteredItems = state.items; 
+
+        state.filteredItems = state.items;
       }
     },
     deleteItem: (state, action) => {
       state.items = state.items.filter(item => item.id !== action.payload);
       state.filteredItems = state.items;
-      
+
       if (state.selectedItem && state.selectedItem.id === action.payload) {
         state.selectedItem = null;
       }
@@ -77,24 +77,20 @@ const stockSlice = createSlice({
   },
 });
 
-
 const applyFilters = (state) => {
   let filtered = [...state.items];
-  
-  
+
   if (state.searchTerm) {
-    filtered = filtered.filter(item => 
+    filtered = filtered.filter(item =>
       item.name.toLowerCase().includes(state.searchTerm.toLowerCase()) ||
       item.sku.toLowerCase().includes(state.searchTerm.toLowerCase())
     );
   }
-  
-  
+
   if (state.filters.category !== 'all') {
     filtered = filtered.filter(item => item.category === state.filters.category);
   }
-  
-  
+
   if (state.filters.inStock !== 'all') {
     if (state.filters.inStock === 'inStock') {
       filtered = filtered.filter(item => item.quantity > 0);
@@ -102,8 +98,7 @@ const applyFilters = (state) => {
       filtered = filtered.filter(item => item.quantity === 0);
     }
   }
-  
-  
+
   filtered.sort((a, b) => {
     if (state.filters.sortBy === 'name') {
       return a.name.localeCompare(b.name);
@@ -114,13 +109,13 @@ const applyFilters = (state) => {
     }
     return 0;
   });
-  
+
   return filtered;
 };
 
-export const { 
-  fetchStockStart, 
-  fetchStockSuccess, 
+export const {
+  fetchStockStart,
+  fetchStockSuccess,
   fetchStockFailure,
   selectItem,
   addItem,

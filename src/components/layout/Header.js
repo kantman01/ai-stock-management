@@ -1,16 +1,16 @@
 import React, { useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { useNavigate } from 'react-router-dom';
-import { 
-  AppBar, 
-  Toolbar, 
-  Typography, 
-  IconButton, 
-  Box, 
-  Menu, 
-  MenuItem, 
-  Avatar, 
-  Badge, 
+import {
+  AppBar,
+  Toolbar,
+  Typography,
+  IconButton,
+  Box,
+  Menu,
+  MenuItem,
+  Avatar,
+  Badge,
   InputBase,
   Tooltip,
   ListItemIcon,
@@ -22,10 +22,10 @@ import {
   Chip,
   Button
 } from '@mui/material';
-import { 
-  Menu as MenuIcon, 
-  Search as SearchIcon, 
-  Notifications as NotificationsIcon, 
+import {
+  Menu as MenuIcon,
+  Search as SearchIcon,
+  Notifications as NotificationsIcon,
   AccountCircle,
   Inventory as InventoryIcon,
   ShoppingCart as ShoppingCartIcon,
@@ -36,7 +36,6 @@ import {
 import { styled, alpha } from '@mui/material/styles';
 
 import { logout, selectUser } from '../../redux/features/authSlice';
-
 
 const Search = styled('div')(({ theme }) => ({
   position: 'relative',
@@ -81,7 +80,7 @@ const Header = ({ sidebarOpen, toggleSidebar, drawerWidth = 250 }) => {
   const dispatch = useDispatch();
   const navigate = useNavigate();
   const user = useSelector(selectUser);
-  
+
   const [anchorEl, setAnchorEl] = useState(null);
   const [notificationsAnchorEl, setNotificationsAnchorEl] = useState(null);
 
@@ -158,14 +157,14 @@ const Header = ({ sidebarOpen, toggleSidebar, drawerWidth = 250 }) => {
           3 new notifications in the last 24 hours
         </Typography>
       </Box>
-      
+
       <Divider sx={{ my: 1 }} />
-      
+
       <List sx={{ p: 0 }}>
-        <ListItem alignItems="flex-start" sx={{ 
-          borderRadius: 1, 
-          mb: 1, 
-          '&:hover': { bgcolor: 'action.hover' } 
+        <ListItem alignItems="flex-start" sx={{
+          borderRadius: 1,
+          mb: 1,
+          '&:hover': { bgcolor: 'action.hover' }
         }}>
           <ListItemIcon sx={{ mt: 1 }}>
             <Avatar sx={{ bgcolor: 'error.light', width: 36, height: 36 }}>
@@ -191,11 +190,11 @@ const Header = ({ sidebarOpen, toggleSidebar, drawerWidth = 250 }) => {
             }
           />
         </ListItem>
-        
-        <ListItem alignItems="flex-start" sx={{ 
-          borderRadius: 1, 
-          mb: 1, 
-          '&:hover': { bgcolor: 'action.hover' } 
+
+        <ListItem alignItems="flex-start" sx={{
+          borderRadius: 1,
+          mb: 1,
+          '&:hover': { bgcolor: 'action.hover' }
         }}>
           <ListItemIcon sx={{ mt: 1 }}>
             <Avatar sx={{ bgcolor: 'primary.light', width: 36, height: 36 }}>
@@ -221,10 +220,10 @@ const Header = ({ sidebarOpen, toggleSidebar, drawerWidth = 250 }) => {
             }
           />
         </ListItem>
-        
-        <ListItem alignItems="flex-start" sx={{ 
-          borderRadius: 1, 
-          '&:hover': { bgcolor: 'action.hover' } 
+
+        <ListItem alignItems="flex-start" sx={{
+          borderRadius: 1,
+          '&:hover': { bgcolor: 'action.hover' }
         }}>
           <ListItemIcon sx={{ mt: 1 }}>
             <Avatar sx={{ bgcolor: 'warning.light', width: 36, height: 36 }}>
@@ -251,12 +250,12 @@ const Header = ({ sidebarOpen, toggleSidebar, drawerWidth = 250 }) => {
           />
         </ListItem>
       </List>
-      
+
       <Divider sx={{ my: 1 }} />
-      
+
       <Box sx={{ textAlign: 'center', py: 1 }}>
-        <Button 
-          variant="text" 
+        <Button
+          variant="text"
           endIcon={<MoreHorizIcon />}
           onClick={() => {
             handleNotificationsMenuClose();
@@ -270,9 +269,9 @@ const Header = ({ sidebarOpen, toggleSidebar, drawerWidth = 250 }) => {
   );
 
   return (
-    <AppBar 
-      position="fixed" 
-      sx={{ 
+    <AppBar
+      position="fixed"
+      sx={{
         zIndex: (theme) => theme.zIndex.drawer + 1,
         width: { sm: `calc(100% - ${sidebarOpen ? drawerWidth : 0}px)` },
         ml: { sm: sidebarOpen ? `${drawerWidth}px` : 0 },
@@ -292,7 +291,7 @@ const Header = ({ sidebarOpen, toggleSidebar, drawerWidth = 250 }) => {
         >
           <MenuIcon />
         </IconButton>
-        
+
         <Typography
           variant="h6"
           noWrap
@@ -301,7 +300,7 @@ const Header = ({ sidebarOpen, toggleSidebar, drawerWidth = 250 }) => {
         >
           AI Stock Management
         </Typography>
-        
+
         <Search>
           <SearchIconWrapper>
             <SearchIcon />
@@ -311,9 +310,9 @@ const Header = ({ sidebarOpen, toggleSidebar, drawerWidth = 250 }) => {
             inputProps={{ 'aria-label': 'search' }}
           />
         </Search>
-        
+
         <Box sx={{ flexGrow: 1 }} />
-        
+
         <Box sx={{ display: 'flex' }}>
           <IconButton
             size="large"

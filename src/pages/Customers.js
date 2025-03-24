@@ -43,7 +43,6 @@ import { hasPermission } from '../utils/roles';
 import { PERMISSIONS } from '../utils/roles';
 import api from '../services/api';
 
-
 const mockCustomers = [
   {
     id: 1,
@@ -105,23 +104,19 @@ const mockCustomers = [
 const Customers = () => {
   const { user } = useSelector(state => state.auth);
   const canManageCustomers = hasPermission(user?.role?.code, PERMISSIONS.MANAGE_CUSTOMERS);
-  
+
   const [customers, setCustomers] = useState([]);
   const [filteredCustomers, setFilteredCustomers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  
-  
+
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(10);
-  
-  
+
   const [searchTerm, setSearchTerm] = useState('');
-  
-  
-  const [viewMode, setViewMode] = useState('table'); 
-  
-  
+
+  const [viewMode, setViewMode] = useState('table');
+
   const [openAddEditDialog, setOpenAddEditDialog] = useState(false);
   const [openDeleteDialog, setOpenDeleteDialog] = useState(false);
   const [currentCustomer, setCurrentCustomer] = useState(null);
@@ -137,18 +132,16 @@ const Customers = () => {
     country: '',
     notes: ''
   });
-  
+
   useEffect(() => {
-    
+
     const fetchCustomers = async () => {
       setLoading(true);
       try {
-        
-        
-        
-        
-        
-        await new Promise(resolve => setTimeout(resolve, 800)); 
+
+
+
+        await new Promise(resolve => setTimeout(resolve, 800));
         setCustomers(mockCustomers);
         setFilteredCustomers(mockCustomers);
         setError(null);
@@ -159,43 +152,42 @@ const Customers = () => {
         setLoading(false);
       }
     };
-    
+
     fetchCustomers();
   }, []);
-  
-  
+
   useEffect(() => {
-    const filtered = customers.filter(customer => 
+    const filtered = customers.filter(customer =>
       customer.first_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       customer.last_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       customer.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
       customer.phone.toLowerCase().includes(searchTerm.toLowerCase()) ||
       customer.address.toLowerCase().includes(searchTerm.toLowerCase())
     );
-    
+
     setFilteredCustomers(filtered);
-    setPage(0); 
+    setPage(0);
   }, [searchTerm, customers]);
-  
+
   const handleChangePage = (event, newPage) => {
     setPage(newPage);
   };
-  
+
   const handleChangeRowsPerPage = (event) => {
     setRowsPerPage(parseInt(event.target.value, 10));
     setPage(0);
   };
-  
+
   const handleSearchChange = (e) => {
     setSearchTerm(e.target.value);
   };
-  
+
   const handleViewModeChange = (event, newMode) => {
     if (newMode !== null) {
       setViewMode(newMode);
     }
   };
-  
+
   const handleAddClick = () => {
     setCurrentCustomer(null);
     setFormData({
@@ -212,7 +204,7 @@ const Customers = () => {
     });
     setOpenAddEditDialog(true);
   };
-  
+
   const handleEditClick = (customer) => {
     setCurrentCustomer(customer);
     setFormData({
@@ -229,18 +221,18 @@ const Customers = () => {
     });
     setOpenAddEditDialog(true);
   };
-  
+
   const handleDeleteClick = (customer) => {
     setCurrentCustomer(customer);
     setOpenDeleteDialog(true);
   };
-  
+
   const handleCloseDialog = () => {
     setOpenAddEditDialog(false);
     setOpenDeleteDialog(false);
     setCurrentCustomer(null);
   };
-  
+
   const handleInputChange = (e) => {
     const { name, value } = e.target;
     setFormData({
@@ -248,45 +240,41 @@ const Customers = () => {
       [name]: value
     });
   };
-  
+
   const validateForm = () => {
-    
+
     if (!formData.first_name || !formData.last_name) {
       setError('First name and last name are required.');
       return false;
     }
     return true;
   };
-  
+
   const handleSaveCustomer = async () => {
     if (!validateForm()) {
       return;
     }
-    
+
     setLoading(true);
     setError(null);
-    
+
     try {
       if (currentCustomer) {
-        
-        
-        
-        
-        
-        const updatedCustomers = customers.map(customer => 
+
+
+
+        const updatedCustomers = customers.map(customer =>
           customer.id === currentCustomer.id ? {
             ...customer,
             ...formData
           } : customer
         );
-        
+
         setCustomers(updatedCustomers);
       } else {
-        
-        
-        
-        
-        
+
+
+
         const newCustomer = {
           id: Math.max(...customers.map(c => c.id)) + 1,
           ...formData,
@@ -294,10 +282,10 @@ const Customers = () => {
           total_spent: 0,
           created_at: new Date().toISOString()
         };
-        
+
         setCustomers([...customers, newCustomer]);
       }
-      
+
       handleCloseDialog();
     } catch (error) {
       console.error('Error saving customer:', error);
@@ -306,20 +294,18 @@ const Customers = () => {
       setLoading(false);
     }
   };
-  
+
   const handleDeleteCustomer = async () => {
     setLoading(true);
     setError(null);
-    
+
     try {
-      
-      
-      
-      
+
+
       const updatedCustomers = customers.filter(
         customer => customer.id !== currentCustomer.id
       );
-      
+
       setCustomers(updatedCustomers);
       handleCloseDialog();
     } catch (error) {
@@ -329,7 +315,7 @@ const Customers = () => {
       setLoading(false);
     }
   };
-  
+
   const renderTableView = () => (
     <Paper sx={{ width: '100%' }}>
       <TableContainer>
@@ -399,12 +385,12 @@ const Customers = () => {
         onPageChange={handleChangePage}
         onRowsPerPageChange={handleChangeRowsPerPage}
         labelRowsPerPage="Rows per page:"
-        labelDisplayedRows={({ from, to, count }) => 
+        labelDisplayedRows={({ from, to, count }) =>
           `${from}-${to} of ${count !== -1 ? count : `more than ${to}`}`}
       />
     </Paper>
   );
-  
+
   const renderCardView = () => (
     <Box sx={{ mt: 2 }}>
       <Grid container spacing={3}>
@@ -437,7 +423,7 @@ const Customers = () => {
                       </Box>
                     )}
                   </Box>
-                  
+
                   <Box sx={{ mt: 2 }}>
                     <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
                       <EmailIcon fontSize="small" color="action" sx={{ mr: 1 }} />
@@ -452,9 +438,9 @@ const Customers = () => {
                       <Typography variant="body2">{customer.address}</Typography>
                     </Box>
                   </Box>
-                  
+
                   <Divider sx={{ my: 2 }} />
-                  
+
                   <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 2 }}>
                     <Chip
                       label={`${customer.order_count} Orders`}
@@ -488,20 +474,20 @@ const Customers = () => {
           onPageChange={handleChangePage}
           onRowsPerPageChange={handleChangeRowsPerPage}
           labelRowsPerPage="Rows per page:"
-          labelDisplayedRows={({ from, to, count }) => 
+          labelDisplayedRows={({ from, to, count }) =>
             `${from}-${to} of ${count !== -1 ? count : `more than ${to}`}`}
         />
       </Box>
     </Box>
   );
-  
+
   return (
     <Box sx={{ p: 3 }}>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
         <Typography variant="h5" component="h1" fontWeight="bold">
           Customers
         </Typography>
-        
+
         {canManageCustomers && (
           <Button
             variant="contained"
@@ -513,7 +499,7 @@ const Customers = () => {
           </Button>
         )}
       </Box>
-      
+
       <Paper sx={{ p: 2, mb: 3 }}>
         <Grid container spacing={2} alignItems="center">
           <Grid item xs={12} sm={6}>
@@ -542,7 +528,7 @@ const Customers = () => {
           </Grid>
         </Grid>
       </Paper>
-      
+
       {loading ? (
         <Box sx={{ display: 'flex', justifyContent: 'center', p: 4 }}>
           <CircularProgress />
@@ -552,8 +538,7 @@ const Customers = () => {
       ) : (
         viewMode === 'table' ? renderTableView() : renderCardView()
       )}
-      
-      
+
       <Dialog open={openAddEditDialog} onClose={handleCloseDialog} maxWidth="md" fullWidth>
         <DialogTitle>
           {currentCustomer ? 'Edit Customer' : 'Add New Customer'}
@@ -676,8 +661,7 @@ const Customers = () => {
           </Button>
         </DialogActions>
       </Dialog>
-      
-      
+
       <Dialog open={openDeleteDialog} onClose={handleCloseDialog}>
         <DialogTitle>Confirm Delete</DialogTitle>
         <DialogContent>

@@ -23,8 +23,7 @@ import { authService } from '../services/api';
 const ResetPassword = () => {
   const { token } = useParams();
   const navigate = useNavigate();
-  
-  
+
   const [formData, setFormData] = useState({
     newPassword: '',
     confirmPassword: '',
@@ -34,23 +33,20 @@ const ResetPassword = () => {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [validationErrors, setValidationErrors] = useState({});
-  
-  
+
   useEffect(() => {
     if (!token) {
       navigate('/forgot-password');
     }
   }, [token, navigate]);
-  
-  
+
   const handleChange = (e) => {
     const { name, value } = e.target;
     setFormData({
       ...formData,
       [name]: value
     });
-    
-    
+
     if (validationErrors[name]) {
       setValidationErrors({
         ...validationErrors,
@@ -58,57 +54,51 @@ const ResetPassword = () => {
       });
     }
   };
-  
-  
+
   const handleTogglePasswordVisibility = () => {
     setShowPassword(!showPassword);
   };
-  
-  
+
   const validateForm = () => {
     const errors = {};
-    
+
     if (!formData.newPassword) {
       errors.newPassword = 'Yeni şifre gereklidir.';
     } else if (formData.newPassword.length < 6) {
       errors.newPassword = 'Şifre en az 6 karakter olmalıdır.';
     }
-    
+
     if (!formData.confirmPassword) {
       errors.confirmPassword = 'Şifre tekrarı gereklidir.';
     } else if (formData.newPassword !== formData.confirmPassword) {
       errors.confirmPassword = 'Şifreler eşleşmiyor.';
     }
-    
+
     setValidationErrors(errors);
     return Object.keys(errors).length === 0;
   };
-  
-  
+
   const handleSubmit = async (e) => {
     e.preventDefault();
-    
-    
+
     if (!validateForm()) {
       return;
     }
-    
+
     setIsSubmitting(true);
     setError('');
     setSuccess('');
-    
+
     try {
-      
+
       const response = await authService.resetPassword(token, formData.newPassword, formData.confirmPassword);
       setSuccess(response.message || 'Şifreniz başarıyla değiştirildi.');
-      
-      
+
       setFormData({
         newPassword: '',
         confirmPassword: '',
       });
-      
-      
+
       setTimeout(() => {
         navigate('/login');
       }, 3000);
@@ -118,7 +108,7 @@ const ResetPassword = () => {
       setIsSubmitting(false);
     }
   };
-  
+
   return (
     <Container component="main" maxWidth="xs">
       <Box
@@ -154,27 +144,27 @@ const ResetPassword = () => {
           >
             <LockOutlined />
           </Box>
-          
+
           <Typography component="h1" variant="h5" fontWeight="bold" gutterBottom>
             Yeni Şifre Belirle
           </Typography>
-          
+
           <Typography variant="body2" color="text.secondary" align="center" sx={{ mb: 3 }}>
             Lütfen yeni şifrenizi belirleyin.
           </Typography>
-          
+
           {error && (
             <Alert severity="error" sx={{ width: '100%', mb: 2 }}>
               {error}
             </Alert>
           )}
-          
+
           {success && (
             <Alert severity="success" sx={{ width: '100%', mb: 2 }}>
               {success}
             </Alert>
           )}
-          
+
           <Box component="form" onSubmit={handleSubmit} sx={{ width: '100%' }}>
             <TextField
               margin="normal"
@@ -204,7 +194,7 @@ const ResetPassword = () => {
                 ),
               }}
             />
-            
+
             <TextField
               margin="normal"
               required
@@ -233,7 +223,7 @@ const ResetPassword = () => {
                 ),
               }}
             />
-            
+
             <Button
               type="submit"
               fullWidth
@@ -243,7 +233,7 @@ const ResetPassword = () => {
             >
               {isSubmitting ? <CircularProgress size={24} /> : 'Şifreyi Sıfırla'}
             </Button>
-            
+
             <Box sx={{ mt: 2, display: 'flex', justifyContent: 'center' }}>
               <Button
                 component={Link}

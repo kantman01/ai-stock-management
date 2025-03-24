@@ -48,41 +48,41 @@ import {
   Cancel as CancelIcon,
   Print as PrintIcon,
   AddShoppingCart as AddItemIcon,
-  RemoveShoppingCart as RemoveItemIcon
+  RemoveShoppingCart as RemoveItemIcon,
+  LocalShipping
 } from '@mui/icons-material';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
 import dayjs from 'dayjs';
 import { useSelector } from 'react-redux';
-import { hasPermission } from '../utils/roles';
-import { PERMISSIONS } from '../utils/roles';
-import api, { apiServices } from '../services/api';
+import { hasPermission } from '../../utils/roles';
+import { PERMISSIONS } from '../../utils/roles';
+import { apiServices } from '../../services/api';
 
-const ORDER_STATUS = {
-  PENDING: 'PENDING',
-  APPROVED: 'APPROVED',
-  SHIPPED: 'SHIPPED',
-  DELIVERED: 'DELIVERED',
-  CANCELLED: 'CANCELLED'
+const SUPPLIER_ORDER_STATUS = {
+  PENDING: 'pending',
+  APPROVED: 'approved',
+  SHIPPED: 'shipped',
+  DELIVERED: 'delivered',
+  COMPLETED: 'completed',
+  CANCELLED: 'cancelled'
 };
 
-const ORDER_STATUS_LABELS = {
-  [ORDER_STATUS.PENDING]: 'Pending',
-  [ORDER_STATUS.APPROVED]: 'Approved',
-  [ORDER_STATUS.SHIPPED]: 'Shipped',
-  [ORDER_STATUS.DELIVERED]: 'Delivered',
-  [ORDER_STATUS.CANCELLED]: 'Cancelled'
+const SUPPLIER_ORDER_STATUS_LABELS = {
+  [SUPPLIER_ORDER_STATUS.PENDING]: 'Pending',
+  [SUPPLIER_ORDER_STATUS.APPROVED]: 'Approved',
+  [SUPPLIER_ORDER_STATUS.SHIPPED]: 'Shipped',
+  [SUPPLIER_ORDER_STATUS.DELIVERED]: 'Delivered',
+  [SUPPLIER_ORDER_STATUS.COMPLETED]: 'Completed',
+  [SUPPLIER_ORDER_STATUS.CANCELLED]: 'Cancelled'
 };
 
-const Orders = () => {
+const SupplierOrders = () => {
   const { user } = useSelector(state => state.auth);
-  const isCustomer = user?.role?.code === 'customer';
-  const canManageOrders = hasPermission(user?.role, PERMISSIONS.MANAGE_ORDERS);
-  const canCreateOrders = hasPermission(user?.role, PERMISSIONS.CREATE_ORDERS);
+  const canManageInventory = hasPermission(user?.role, PERMISSIONS.MANAGE_INVENTORY);
 
-  const [orders, setOrders] = useState([]);
-  const [filteredOrders, setFilteredOrders] = useState([]);
+  const [supplierOrders, setSupplierOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [totalCount, setTotalCount] = useState(0);
@@ -101,65 +101,58 @@ const Orders = () => {
   const [selectedOrder, setSelectedOrder] = useState(null);
 
   const [openNewOrderDialog, setOpenNewOrderDialog] = useState(false);
-  const [customers, setCustomers] = useState([]);
+  const [suppliers, setSuppliers] = useState([]);
   const [products, setProducts] = useState([]);
-  const [selectedCustomer, setSelectedCustomer] = useState(null);
+  const [selectedSupplier, setSelectedSupplier] = useState(null);
   const [orderItems, setOrderItems] = useState([]);
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
   const [formValidation, setFormValidation] = useState({
-    customerValid: false,
+    supplierValid: false,
     itemsValid: false
   });
 
   useEffect(() => {
+    fetchSupplierOrders();
+  }, [page, rowsPerPage, filters]);
 
-    const fetchOrders = async () => {
-      setLoading(true);
-      try {
+  const fetchSupplierOrders = async () => {
+    setLoading(true);
+    try {
 
-        const params = {
-          limit: rowsPerPage,
-          offset: page * rowsPerPage,
-          search: filters.search || undefined,
-          status: filters.status || undefined,
-          start_date: filters.startDate ? dayjs(filters.startDate).format('YYYY-MM-DD') : undefined,
-          end_date: filters.endDate ? dayjs(filters.endDate).format('YYYY-MM-DD') : undefined
-        };
+      const params = {
+        limit: rowsPerPage,
+        offset: page * rowsPerPage,
+        search: filters.search || undefined,
+        status: filters.status || undefined,
+        start_date: filters.startDate ? dayjs(filters.startDate).format('YYYY-MM-DD') : undefined,
+        end_date: filters.endDate ? dayjs(filters.endDate).format('YYYY-MM-DD') : undefined
+      };
 
-        if (isCustomer && user?.customer_id) {
-          params.customer_id = user.customer_id;
-        }
+      const response = await apiServices.supplierOrders.getAll(params);
 
-        const response = await apiServices.orders.getAll(params);
-
-        setOrders(response.data.data || []);
-        setFilteredOrders(response.data.data || []);
-        setTotalCount(response.data.pagination?.total || 0);
-        setError(null);
-      } catch (error) {
-        console.error('Error fetching orders:', error);
-        setError('Error loading orders: ' + (error.message || 'Unknown error'));
-        setOrders([]);
-        setFilteredOrders([]);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchOrders();
-  }, [page, rowsPerPage, filters, user]);
+      setSupplierOrders(response.data.data || []);
+      setTotalCount(response.data.pagination?.total || 0);
+      setError(null);
+    } catch (error) {
+      console.error('Error fetching supplier orders:', error);
+      setError('Error loading supplier orders: ' + (error.message || 'Unknown error'));
+      setSupplierOrders([]);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
     if (openNewOrderDialog) {
-      const fetchCustomers = async () => {
+      const fetchSuppliers = async () => {
         try {
-          const response = await api.get('/customers');
-          setCustomers(response.data.data || []);
+          const response = await apiServices.suppliers.getAll();
+          setSuppliers(response.data.data || []);
         } catch (error) {
-          console.error('Error fetching customers:', error);
+          console.error('Error fetching suppliers:', error);
           setSnackbar({
             open: true,
-            message: 'Error loading customers: ' + (error.message || 'Unknown error'),
+            message: 'Error loading suppliers: ' + (error.message || 'Unknown error'),
             severity: 'error'
           });
         }
@@ -167,7 +160,7 @@ const Orders = () => {
 
       const fetchProducts = async () => {
         try {
-          const response = await api.get('/products');
+          const response = await apiServices.products.getAll();
           setProducts(response.data.data || []);
         } catch (error) {
           console.error('Error fetching products:', error);
@@ -179,17 +172,17 @@ const Orders = () => {
         }
       };
 
-      fetchCustomers();
+      fetchSuppliers();
       fetchProducts();
     }
   }, [openNewOrderDialog]);
 
   useEffect(() => {
     setFormValidation({
-      customerValid: !!selectedCustomer,
+      supplierValid: !!selectedSupplier,
       itemsValid: orderItems.length > 0
     });
-  }, [selectedCustomer, orderItems]);
+  }, [selectedSupplier, orderItems]);
 
   const handleChangePage = (event, newPage) => {
     setPage(newPage);
@@ -218,7 +211,7 @@ const Orders = () => {
   const handleViewOrder = async (order) => {
     try {
       setLoading(true);
-      const response = await api.get(`/orders/${order.id}`);
+      const response = await apiServices.supplierOrders.getById(order.id);
       setSelectedOrder(response.data);
       setOrderDetailsDialog(true);
     } catch (error) {
@@ -242,30 +235,48 @@ const Orders = () => {
     try {
       setLoading(true);
 
-      await api.patch(`/orders/${orderId}/status`, { status: newStatus });
+      if (newStatus === SUPPLIER_ORDER_STATUS.COMPLETED) {
 
-      setSnackbar({
-        open: true,
-        message: `Order status updated to ${ORDER_STATUS_LABELS[newStatus]}`,
-        severity: 'success'
-      });
+        const orderCheck = await apiServices.supplierOrders.getById(orderId);
+        if (orderCheck.data.status !== SUPPLIER_ORDER_STATUS.DELIVERED) {
+          setSnackbar({
+            open: true,
+            message: 'Order must be in delivered status before it can be completed.',
+            severity: 'error'
+          });
+          return;
+        }
 
-      const updatedOrders = orders.map(order =>
-        order.id === orderId ? { ...order, status: newStatus } : order
-      );
+        await apiServices.supplierOrders.complete(orderId);
 
-      setOrders(updatedOrders);
-      setFilteredOrders(updatedOrders);
+        setSnackbar({
+          open: true,
+          message: `Order completed and items added to inventory`,
+          severity: 'success'
+        });
+      } else {
+
+        await apiServices.supplierOrders.updateStatus(orderId, newStatus);
+
+        setSnackbar({
+          open: true,
+          message: `Order status updated to ${SUPPLIER_ORDER_STATUS_LABELS[newStatus]}`,
+          severity: 'success'
+        });
+      }
+
+      fetchSupplierOrders();
 
       if (selectedOrder && selectedOrder.id === orderId) {
-        setSelectedOrder({ ...selectedOrder, status: newStatus });
+        const updatedOrder = await apiServices.supplierOrders.getById(orderId);
+        setSelectedOrder(updatedOrder.data);
       }
 
     } catch (error) {
       console.error('Error updating order status:', error);
       setSnackbar({
         open: true,
-        message: 'Error updating order status: ' + (error.message || 'Unknown error'),
+        message: 'Error updating order status: ' + (error.response?.data?.message || error.message || 'Unknown error'),
         severity: 'error'
       });
     } finally {
@@ -277,7 +288,7 @@ const Orders = () => {
     try {
       setLoading(true);
 
-      await api.delete(`/orders/${orderId}`);
+      await apiServices.supplierOrders.delete(orderId);
 
       setSnackbar({
         open: true,
@@ -285,22 +296,17 @@ const Orders = () => {
         severity: 'success'
       });
 
-      const updatedOrders = orders.map(order =>
-        order.id === orderId ? { ...order, status: 'cancelled' } : order
-      );
-
-      setOrders(updatedOrders);
-      setFilteredOrders(updatedOrders);
+      fetchSupplierOrders();
 
       if (selectedOrder && selectedOrder.id === orderId) {
-        setSelectedOrder({ ...selectedOrder, status: 'cancelled' });
+        setSelectedOrder({ ...selectedOrder, status: SUPPLIER_ORDER_STATUS.CANCELLED });
       }
 
     } catch (error) {
       console.error('Error cancelling order:', error);
       setSnackbar({
         open: true,
-        message: 'Error cancelling order: ' + (error.message || 'Unknown error'),
+        message: 'Error cancelling order: ' + (error.response?.data?.message || error.message || 'Unknown error'),
         severity: 'error'
       });
     } finally {
@@ -312,19 +318,22 @@ const Orders = () => {
     let color;
 
     switch (status) {
-      case ORDER_STATUS.PENDING:
+      case SUPPLIER_ORDER_STATUS.PENDING:
         color = 'warning';
         break;
-      case ORDER_STATUS.APPROVED:
+      case SUPPLIER_ORDER_STATUS.APPROVED:
         color = 'info';
         break;
-      case ORDER_STATUS.SHIPPED:
+      case SUPPLIER_ORDER_STATUS.SHIPPED:
         color = 'primary';
         break;
-      case ORDER_STATUS.DELIVERED:
+      case SUPPLIER_ORDER_STATUS.DELIVERED:
+        color = 'secondary';
+        break;
+      case SUPPLIER_ORDER_STATUS.COMPLETED:
         color = 'success';
         break;
-      case ORDER_STATUS.CANCELLED:
+      case SUPPLIER_ORDER_STATUS.CANCELLED:
         color = 'error';
         break;
       default:
@@ -333,7 +342,7 @@ const Orders = () => {
 
     return (
       <Chip
-        label={ORDER_STATUS_LABELS[status] || status}
+        label={SUPPLIER_ORDER_STATUS_LABELS[status] || status}
         color={color}
         size="small"
       />
@@ -341,24 +350,24 @@ const Orders = () => {
   };
 
   const getStatusActions = (order) => {
-    if (!canManageOrders) return null;
+    if (!canManageInventory) return null;
 
     const { id, status } = order;
 
     switch (status) {
-      case ORDER_STATUS.PENDING:
+      case SUPPLIER_ORDER_STATUS.PENDING:
         return (
           <Stack direction="row" spacing={1}>
             <Tooltip title="Approve">
               <IconButton
                 color="success"
                 size="small"
-                onClick={() => handleUpdateOrderStatus(id, ORDER_STATUS.APPROVED)}
+                onClick={() => handleUpdateOrderStatus(id, SUPPLIER_ORDER_STATUS.APPROVED)}
               >
                 <CheckIcon />
               </IconButton>
             </Tooltip>
-            <Tooltip title="Reject">
+            <Tooltip title="Cancel">
               <IconButton
                 color="error"
                 size="small"
@@ -370,26 +379,39 @@ const Orders = () => {
           </Stack>
         );
 
-      case ORDER_STATUS.APPROVED:
+      case SUPPLIER_ORDER_STATUS.APPROVED:
         return (
           <Tooltip title="Mark as Shipped">
             <IconButton
               color="primary"
               size="small"
-              onClick={() => handleUpdateOrderStatus(id, ORDER_STATUS.SHIPPED)}
+              onClick={() => handleUpdateOrderStatus(id, SUPPLIER_ORDER_STATUS.SHIPPED)}
             >
               <ShippingIcon />
             </IconButton>
           </Tooltip>
         );
 
-      case ORDER_STATUS.SHIPPED:
+      case SUPPLIER_ORDER_STATUS.SHIPPED:
         return (
           <Tooltip title="Mark as Delivered">
             <IconButton
+              color="secondary"
+              size="small"
+              onClick={() => handleUpdateOrderStatus(id, SUPPLIER_ORDER_STATUS.DELIVERED)}
+            >
+              <ShippingIcon />
+            </IconButton>
+          </Tooltip>
+        );
+
+      case SUPPLIER_ORDER_STATUS.DELIVERED:
+        return (
+          <Tooltip title="Complete & Add to Inventory">
+            <IconButton
               color="success"
               size="small"
-              onClick={() => handleUpdateOrderStatus(id, ORDER_STATUS.DELIVERED)}
+              onClick={() => handleUpdateOrderStatus(id, SUPPLIER_ORDER_STATUS.COMPLETED)}
             >
               <CheckIcon />
             </IconButton>
@@ -402,7 +424,7 @@ const Orders = () => {
   };
 
   const handleOpenNewOrderDialog = () => {
-    setSelectedCustomer(null);
+    setSelectedSupplier(null);
     setOrderItems([]);
     setOpenNewOrderDialog(true);
   };
@@ -411,8 +433,8 @@ const Orders = () => {
     setOpenNewOrderDialog(false);
   };
 
-  const handleCustomerChange = (event, newValue) => {
-    setSelectedCustomer(newValue);
+  const handleSupplierChange = (event, newValue) => {
+    setSelectedSupplier(newValue);
   };
 
   const handleAddProduct = (product) => {
@@ -456,61 +478,46 @@ const Orders = () => {
   };
 
   const handleCreateOrder = async () => {
-    if (!selectedCustomer || orderItems.length === 0) {
+    if (!selectedSupplier || orderItems.length === 0) {
       setSnackbar({
         open: true,
-        message: 'Please select a customer and add at least one product',
+        message: 'Please select a supplier and add at least one product',
         severity: 'error'
       });
       return;
     }
 
     try {
+      setLoading(true);
+
       const orderData = {
-        customer_id: selectedCustomer.id,
+        supplier_id: selectedSupplier.id,
         items: orderItems.map(item => ({
           product_id: item.id,
           quantity: item.quantity
         }))
       };
 
-      const response = await api.post('/orders', orderData);
+      await apiServices.supplierOrders.create(orderData);
 
       setSnackbar({
         open: true,
-        message: 'Order created successfully',
+        message: 'Supplier order created successfully',
         severity: 'success'
       });
 
-      setTimeout(() => {
-        const fetchOrders = async () => {
-          try {
-            const response = await api.get('/orders', {
-              params: {
-                limit: rowsPerPage,
-                offset: page * rowsPerPage,
-              }
-            });
-
-            setOrders(response.data.data || []);
-            setFilteredOrders(response.data.data || []);
-            setTotalCount(response.data.pagination?.total || 0);
-          } catch (error) {
-            console.error('Error refreshing orders:', error);
-          }
-        };
-
-        fetchOrders();
-      }, 500);
+      fetchSupplierOrders();
 
       handleCloseNewOrderDialog();
     } catch (error) {
-      console.error('Error creating order:', error);
+      console.error('Error creating supplier order:', error);
       setSnackbar({
         open: true,
-        message: error.response?.data?.error,
+        message: error.response?.data?.message || error.message || 'Error creating supplier order',
         severity: 'error'
       });
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -522,17 +529,17 @@ const Orders = () => {
     <Box sx={{ p: 3 }}>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
         <Typography variant="h5" component="h1" fontWeight="bold">
-          {isCustomer ? 'My Orders' : 'Orders'}
+          Supplier Orders
         </Typography>
 
-        {canCreateOrders && (
+        {canManageInventory && (
           <Button
             variant="contained"
             color="primary"
             startIcon={<AddIcon />}
             onClick={handleOpenNewOrderDialog}
           >
-            New Order
+            New Purchase Order
           </Button>
         )}
       </Box>
@@ -546,7 +553,7 @@ const Orders = () => {
           <Grid item xs={12} sm={6} md={4}>
             <TextField
               name="search"
-              label="Order ID or Customer"
+              label="Order ID or Supplier"
               variant="outlined"
               fullWidth
               value={filters.search}
@@ -570,7 +577,7 @@ const Orders = () => {
                 onChange={handleFilterChange}
               >
                 <MenuItem value="">All Statuses</MenuItem>
-                {Object.entries(ORDER_STATUS_LABELS).map(([key, value]) => (
+                {Object.entries(SUPPLIER_ORDER_STATUS_LABELS).map(([key, value]) => (
                   <MenuItem key={key} value={key}>{value}</MenuItem>
                 ))}
               </Select>
@@ -611,7 +618,7 @@ const Orders = () => {
               <TableHead>
                 <TableRow>
                   <TableCell>Order ID</TableCell>
-                  <TableCell>Customer</TableCell>
+                  <TableCell>Supplier</TableCell>
                   <TableCell>Status</TableCell>
                   <TableCell align="right">Total Amount</TableCell>
                   <TableCell align="center">Items Count</TableCell>
@@ -620,40 +627,38 @@ const Orders = () => {
                 </TableRow>
               </TableHead>
               <TableBody>
-                {filteredOrders
-                  .slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage)
-                  .map((order) => (
-                    <TableRow key={order.id}>
-                      <TableCell component="th" scope="row">
-                        {order.id}
-                      </TableCell>
-                      <TableCell>{order.customer_name}</TableCell>
-                      <TableCell>{getStatusChip(order.status)}</TableCell>
-                      <TableCell align="right">
-                        ${order.total_amount !== undefined ? order.total_amount : '0.00'}
-                      </TableCell>
-                      <TableCell align="center">{order.item_count}</TableCell>
-                      <TableCell>{dayjs(order.date).format('MM/DD/YYYY HH:mm')}</TableCell>
-                      <TableCell align="right">
-                        <Stack direction="row" spacing={1} justifyContent="flex-end">
-                          <Tooltip title="Details">
-                            <IconButton
-                              color="primary"
-                              size="small"
-                              onClick={() => handleViewOrder(order)}
-                            >
-                              <ViewIcon />
-                            </IconButton>
-                          </Tooltip>
-                          {getStatusActions(order)}
-                        </Stack>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                {filteredOrders.length === 0 && (
+                {supplierOrders.map((order) => (
+                  <TableRow key={order.id}>
+                    <TableCell component="th" scope="row">
+                      {order.id}
+                    </TableCell>
+                    <TableCell>{order.supplier_name}</TableCell>
+                    <TableCell>{getStatusChip(order.status)}</TableCell>
+                    <TableCell align="right">
+                      ${parseFloat(order.total_amount).toFixed(2)}
+                    </TableCell>
+                    <TableCell align="center">{order.item_count}</TableCell>
+                    <TableCell>{dayjs(order.created_at).format('MM/DD/YYYY HH:mm')}</TableCell>
+                    <TableCell align="right">
+                      <Stack direction="row" spacing={1} justifyContent="flex-end">
+                        <Tooltip title="Details">
+                          <IconButton
+                            color="primary"
+                            size="small"
+                            onClick={() => handleViewOrder(order)}
+                          >
+                            <ViewIcon />
+                          </IconButton>
+                        </Tooltip>
+                        {getStatusActions(order)}
+                      </Stack>
+                    </TableCell>
+                  </TableRow>
+                ))}
+                {supplierOrders.length === 0 && (
                   <TableRow>
                     <TableCell colSpan={7} align="center">
-                      No orders found.
+                      No supplier orders found.
                     </TableCell>
                   </TableRow>
                 )}
@@ -669,8 +674,6 @@ const Orders = () => {
             onPageChange={handleChangePage}
             onRowsPerPageChange={handleChangeRowsPerPage}
             labelRowsPerPage="Rows per page:"
-            labelDisplayedRows={({ from, to, count }) =>
-              `${from}-${to} of ${count !== -1 ? count : `more than ${to}`}`}
           />
         </Paper>
       )}
@@ -679,26 +682,26 @@ const Orders = () => {
         <Dialog open={orderDetailsDialog} onClose={handleCloseDialog} maxWidth="md" fullWidth>
           <DialogTitle>
             <Typography variant="h6">
-              Order #{selectedOrder.order_number || selectedOrder.id}
+              Supplier Order #{selectedOrder.id}
             </Typography>
           </DialogTitle>
           <DialogContent dividers>
             <Grid container spacing={2}>
               <Grid item xs={12} md={6}>
                 <Typography variant="subtitle2" color="text.secondary">
-                  Customer Information
+                  Supplier Information
                 </Typography>
                 <Typography variant="body1" sx={{ mt: 1 }}>
-                  {selectedOrder.customer_name}
+                  {selectedOrder.supplier_name}
                 </Typography>
-                {selectedOrder.customer_email && (
+                {selectedOrder.supplier_email && (
                   <Typography variant="body2">
-                    Email: {selectedOrder.customer_email}
+                    Email: {selectedOrder.supplier_email}
                   </Typography>
                 )}
-                {selectedOrder.customer_phone && (
+                {selectedOrder.supplier_phone && (
                   <Typography variant="body2">
-                    Phone: {selectedOrder.customer_phone}
+                    Phone: {selectedOrder.supplier_phone}
                   </Typography>
                 )}
               </Grid>
@@ -724,22 +727,6 @@ const Orders = () => {
                         {dayjs(selectedOrder.created_at).format('MM/DD/YYYY HH:mm')}
                       </Typography>
                     </Grid>
-                    <Grid item xs={6}>
-                      <Typography variant="body2" color="text.secondary">
-                        Payment Status
-                      </Typography>
-                      <Typography variant="body1">
-                        {selectedOrder.payment_status}
-                      </Typography>
-                    </Grid>
-                    <Grid item xs={6}>
-                      <Typography variant="body2" color="text.secondary">
-                        Created By
-                      </Typography>
-                      <Typography variant="body1">
-                        {selectedOrder.created_by_name || 'System'}
-                      </Typography>
-                    </Grid>
                   </Grid>
                 </Box>
               </Grid>
@@ -756,7 +743,6 @@ const Orders = () => {
                         <TableCell>Product</TableCell>
                         <TableCell align="center">Quantity</TableCell>
                         <TableCell align="right">Unit Price</TableCell>
-                        <TableCell align="right">Tax</TableCell>
                         <TableCell align="right">Total</TableCell>
                       </TableRow>
                     </TableHead>
@@ -769,34 +755,13 @@ const Orders = () => {
                             ${parseFloat(item.unit_price).toFixed(2)}
                           </TableCell>
                           <TableCell align="right">
-                            ${parseFloat(item.tax_amount).toFixed(2)}
-                          </TableCell>
-                          <TableCell align="right">
                             ${parseFloat(item.total_price).toFixed(2)}
                           </TableCell>
                         </TableRow>
                       ))}
                       <TableRow>
                         <TableCell colSpan={2} />
-                        <TableCell colSpan={2} align="right" sx={{ fontWeight: 'bold' }}>
-                          Subtotal
-                        </TableCell>
-                        <TableCell align="right">
-                          ${parseFloat(selectedOrder.subtotal).toFixed(2)}
-                        </TableCell>
-                      </TableRow>
-                      <TableRow>
-                        <TableCell colSpan={2} />
-                        <TableCell colSpan={2} align="right" sx={{ fontWeight: 'bold' }}>
-                          Tax
-                        </TableCell>
-                        <TableCell align="right">
-                          ${parseFloat(selectedOrder.tax_total).toFixed(2)}
-                        </TableCell>
-                      </TableRow>
-                      <TableRow>
-                        <TableCell colSpan={2} />
-                        <TableCell colSpan={2} align="right" sx={{ fontWeight: 'bold' }}>
+                        <TableCell align="right" sx={{ fontWeight: 'bold' }}>
                           Total
                         </TableCell>
                         <TableCell align="right" sx={{ fontWeight: 'bold' }}>
@@ -821,13 +786,13 @@ const Orders = () => {
             </Grid>
           </DialogContent>
           <DialogActions>
-            {canManageOrders && (
+            {canManageInventory && (
               <>
-                {selectedOrder.status === 'pending' && (
+                {selectedOrder.status === SUPPLIER_ORDER_STATUS.PENDING && (
                   <>
                     <Button
                       onClick={() => {
-                        handleUpdateOrderStatus(selectedOrder.id, 'approved');
+                        handleUpdateOrderStatus(selectedOrder.id, SUPPLIER_ORDER_STATUS.APPROVED);
                         handleCloseDialog();
                       }}
                       color="success"
@@ -845,10 +810,10 @@ const Orders = () => {
                     </Button>
                   </>
                 )}
-                {selectedOrder.status === 'approved' && (
+                {selectedOrder.status === SUPPLIER_ORDER_STATUS.APPROVED && (
                   <Button
                     onClick={() => {
-                      handleUpdateOrderStatus(selectedOrder.id, 'shipped');
+                      handleUpdateOrderStatus(selectedOrder.id, SUPPLIER_ORDER_STATUS.SHIPPED);
                       handleCloseDialog();
                     }}
                     color="primary"
@@ -856,15 +821,26 @@ const Orders = () => {
                     Mark as Shipped
                   </Button>
                 )}
-                {selectedOrder.status === 'shipped' && (
+                {selectedOrder.status === SUPPLIER_ORDER_STATUS.SHIPPED && (
                   <Button
                     onClick={() => {
-                      handleUpdateOrderStatus(selectedOrder.id, 'delivered');
+                      handleUpdateOrderStatus(selectedOrder.id, SUPPLIER_ORDER_STATUS.DELIVERED);
                       handleCloseDialog();
                     }}
                     color="primary"
                   >
                     Mark as Delivered
+                  </Button>
+                )}
+                {selectedOrder.status === SUPPLIER_ORDER_STATUS.DELIVERED && (
+                  <Button
+                    onClick={() => {
+                      handleUpdateOrderStatus(selectedOrder.id, SUPPLIER_ORDER_STATUS.COMPLETED);
+                      handleCloseDialog();
+                    }}
+                    color="success"
+                  >
+                    Complete & Add to Inventory
                   </Button>
                 )}
               </>
@@ -876,21 +852,21 @@ const Orders = () => {
 
       {/* New Order Dialog */}
       <Dialog open={openNewOrderDialog} onClose={handleCloseNewOrderDialog} maxWidth="md" fullWidth>
-        <DialogTitle>Create New Order</DialogTitle>
+        <DialogTitle>Create New Supplier Order</DialogTitle>
         <DialogContent dividers>
           <Grid container spacing={3}>
-            {/* Customer Selection */}
+            {/* Supplier Selection */}
             <Grid item xs={12}>
               <Autocomplete
-                id="customer-select"
-                options={customers}
-                getOptionLabel={(option) => `${option.first_name} ${option.last_name}`}
-                value={selectedCustomer}
-                onChange={handleCustomerChange}
+                id="supplier-select"
+                options={suppliers}
+                getOptionLabel={(option) => option.name}
+                value={selectedSupplier}
+                onChange={handleSupplierChange}
                 renderInput={(params) => (
                   <TextField
                     {...params}
-                    label="Customer"
+                    label="Supplier"
                     required
                     variant="outlined"
                     fullWidth
@@ -906,8 +882,8 @@ const Orders = () => {
               </Typography>
               <Autocomplete
                 id="product-select"
-                options={products.filter(p => p.stock_quantity > 0)}
-                getOptionLabel={(option) => `${option.name} (${option.stock_quantity} in stock)`}
+                options={products}
+                getOptionLabel={(option) => `${option.name} ($${option.price})`}
                 onChange={(event, newValue) => newValue && handleAddProduct(newValue)}
                 renderInput={(params) => (
                   <TextField
@@ -955,7 +931,7 @@ const Orders = () => {
                             />
                           </TableCell>
                           <TableCell align="right">
-                            ${item.price}
+                            ${parseFloat(item.price).toFixed(2)}
                           </TableCell>
                           <TableCell align="right">
                             ${(item.price * item.quantity).toFixed(2)}
@@ -993,7 +969,7 @@ const Orders = () => {
             onClick={handleCreateOrder}
             variant="contained"
             color="primary"
-            disabled={!formValidation.customerValid || !formValidation.itemsValid}
+            disabled={!formValidation.supplierValid || !formValidation.itemsValid}
           >
             Create Order
           </Button>
@@ -1014,4 +990,4 @@ const Orders = () => {
   );
 };
 
-export default Orders; 
+export default SupplierOrders; 

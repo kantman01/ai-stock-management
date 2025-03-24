@@ -1,6 +1,5 @@
 const { body } = require('express-validator');
 
-
 exports.loginValidation = [
   body('email')
     .notEmpty().withMessage('E-posta adresi gereklidir.')
@@ -8,7 +7,6 @@ exports.loginValidation = [
   body('password')
     .notEmpty().withMessage('Şifre gereklidir.')
 ];
-
 
 exports.createUserValidation = [
   body('email')
@@ -26,7 +24,6 @@ exports.createUserValidation = [
     .isInt().withMessage('Geçerli bir rol ID\'si giriniz.')
 ];
 
-
 exports.updateUserValidation = [
   body('email')
     .optional()
@@ -38,7 +35,6 @@ exports.updateUserValidation = [
     .optional()
     .isInt().withMessage('Geçerli bir rol ID\'si giriniz.')
 ];
-
 
 exports.changePasswordValidation = [
   body('currentPassword')
@@ -56,7 +52,6 @@ exports.changePasswordValidation = [
     })
 ];
 
-
 exports.updateProfileValidation = [
   body('firstName')
     .optional()
@@ -69,13 +64,11 @@ exports.updateProfileValidation = [
     .isString().withMessage('Telefon numarası geçerli bir format olmalıdır.')
 ];
 
-
 exports.forgotPasswordValidation = [
   body('email')
     .notEmpty().withMessage('E-posta adresi gereklidir.')
     .isEmail().withMessage('Geçerli bir e-posta adresi giriniz.')
 ];
-
 
 exports.resetPasswordValidation = [
   body('token')
@@ -92,7 +85,6 @@ exports.resetPasswordValidation = [
       return true;
     })
 ];
-
 
 exports.createProductValidation = [
   body('name')
@@ -160,7 +152,6 @@ exports.updateStockValidation = [
     .isString().withMessage('Notes must be a string.')
 ];
 
-
 exports.createCategoryValidation = [
   body('name')
     .notEmpty().withMessage('Category name is required.')
@@ -196,7 +187,6 @@ exports.updateCategoryValidation = [
     .optional()
     .isBoolean().withMessage('is_active must be a boolean value.')
 ];
-
 
 exports.createOrderValidation = [
   body('customer_id')
@@ -238,7 +228,6 @@ exports.updateOrderStatusValidation = [
     .optional()
     .isIn(['unpaid', 'partial', 'paid']).withMessage('Invalid payment status.')
 ];
-
 
 exports.createCustomerValidation = [
   body('first_name')
@@ -311,7 +300,6 @@ exports.updateCustomerValidation = [
     .optional()
     .isBoolean().withMessage('is_active must be a boolean value.')
 ];
-
 
 exports.createSupplierValidation = [
   body('name')

@@ -19,22 +19,22 @@ const NotFound = () => {
         }}
       >
         <SentimentDissatisfied sx={{ fontSize: 100, color: 'primary.main', mb: 3 }} />
-        
+
         <Typography variant="h3" component="h1" gutterBottom>
           404
         </Typography>
-        
+
         <Typography variant="h5" component="h2" gutterBottom>
           Page Not Found
         </Typography>
-        
+
         <Typography variant="body1" color="text.secondary" paragraph sx={{ mb: 4 }}>
           The page you are looking for does not exist, has been removed, or is temporarily unavailable.
         </Typography>
-        
-        <Button 
-          variant="contained" 
-          size="large" 
+
+        <Button
+          variant="contained"
+          size="large"
           onClick={() => navigate('/login')}
           sx={{ borderRadius: 2, py: 1, px: 3 }}
         >

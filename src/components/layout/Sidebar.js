@@ -39,7 +39,6 @@ import { styled } from '@mui/material/styles';
 import { PERMISSIONS, canAccessMenuItem } from '../../utils/roles';
 import { selectUser, logout } from '../../redux/features/authSlice';
 
-
 const StyledDrawer = styled(Drawer)(({ theme, drawerWidth }) => ({
   width: drawerWidth,
   flexShrink: 0,
@@ -56,13 +55,11 @@ const Sidebar = ({ open, onClose, drawerWidth = 250 }) => {
   const location = useLocation();
   const dispatch = useDispatch();
   const user = useSelector(selectUser);
-  
-  
+
   const [stockOpen, setStockOpen] = React.useState(false);
   const [reportsOpen, setReportsOpen] = React.useState(false);
   const [userManagementOpen, setUserManagementOpen] = React.useState(false);
 
-  
   const handleStockClick = () => {
     setStockOpen(!stockOpen);
   };
@@ -70,21 +67,18 @@ const Sidebar = ({ open, onClose, drawerWidth = 250 }) => {
   const handleReportsClick = () => {
     setReportsOpen(!reportsOpen);
   };
-  
+
   const handleUserManagementClick = () => {
     setUserManagementOpen(!userManagementOpen);
   };
 
-  
   const handleLogout = () => {
     dispatch(logout());
     navigate('/login');
   };
 
-  
   const isSelected = (path) => location.pathname === path;
 
-  
   const menuItems = [
     {
       text: 'Dashboard',
@@ -125,6 +119,12 @@ const Sidebar = ({ open, onClose, drawerWidth = 250 }) => {
       icon: <OrdersIcon />,
       path: '/orders',
       permission: [PERMISSIONS.VIEW_ORDERS, PERMISSIONS.MANAGE_ORDERS, PERMISSIONS.CREATE_ORDERS],
+    },
+    {
+      text: 'Supplier Orders',
+      icon: <SuppliersIcon />,
+      path: '/supplier-orders',
+      permission: PERMISSIONS.MANAGE_INVENTORY,
     },
     {
       text: 'Customers',
@@ -201,17 +201,16 @@ const Sidebar = ({ open, onClose, drawerWidth = 250 }) => {
     },
   ];
 
-  
   const renderSubMenu = (items) => {
     return (
       <Collapse in={items.open} timeout="auto" unmountOnExit>
         <List component="div" disablePadding>
-          {items.items.map((subItem) => 
-            
+          {items.items.map((subItem) =>
+
             canAccessMenuItem(user?.role?.code, subItem.permission) && (
-              <ListItem 
-                key={subItem.text} 
-                disablePadding 
+              <ListItem
+                key={subItem.text}
+                disablePadding
                 sx={{ pl: 4 }}
                 onClick={() => navigate(subItem.path)}
               >
@@ -237,15 +236,15 @@ const Sidebar = ({ open, onClose, drawerWidth = 250 }) => {
       onClose={onClose}
       drawerWidth={drawerWidth}
     >
-      
+
       {user && (
         <Box sx={{ p: 2, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-          <Avatar 
-            src={user.avatar} 
+          <Avatar
+            src={user.avatar}
             alt={user.firstName}
-            sx={{ 
-              width: 64, 
-              height: 64, 
+            sx={{
+              width: 64,
+              height: 64,
               mb: 1,
               bgcolor: 'primary.main'
             }}
@@ -259,19 +258,19 @@ const Sidebar = ({ open, onClose, drawerWidth = 250 }) => {
             {user.role?.name || user.email}
           </Typography>
           <Stack direction="row" spacing={1} sx={{ mt: 1, width: '100%' }}>
-            <Button 
-              variant="outlined" 
-              size="small" 
+            <Button
+              variant="outlined"
+              size="small"
               startIcon={<PersonIcon />}
               fullWidth
               onClick={() => navigate('/profile')}
             >
               Profile
             </Button>
-            <Button 
-              variant="outlined" 
-              color="error" 
-              size="small" 
+            <Button
+              variant="outlined"
+              color="error"
+              size="small"
               startIcon={<LogoutIcon />}
               fullWidth
               onClick={handleLogout}
@@ -282,14 +281,14 @@ const Sidebar = ({ open, onClose, drawerWidth = 250 }) => {
         </Box>
       )}
       <Divider />
-      
+
       <List>
         {menuItems.map((item) => {
-          
+
           if (item.permission && !canAccessMenuItem(user?.role?.code, item.permission)) {
             return null;
           }
-          
+
           return (
             <div key={item.text}>
               <ListItem disablePadding>
@@ -303,7 +302,7 @@ const Sidebar = ({ open, onClose, drawerWidth = 250 }) => {
                   </ListItemButton>
                 ) : (
                   <Tooltip title={item.text} placement="right">
-                    <ListItemButton 
+                    <ListItemButton
                       selected={isSelected(item.path)}
                       onClick={() => navigate(item.path)}
                     >

@@ -25,7 +25,14 @@ import {
   MenuItem,
   TextField,
   Stack,
-  Chip
+  Chip,
+  Snackbar,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow
 } from '@mui/material';
 import {
   BarChart as BarChartIcon,
@@ -40,7 +47,8 @@ import {
   Inventory as InventoryIcon,
   ShoppingCart as ShoppingCartIcon,
   Group as GroupIcon,
-  Store as StoreIcon
+  Store as StoreIcon,
+  Delete as DeleteIcon
 } from '@mui/icons-material';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
@@ -49,8 +57,32 @@ import dayjs from 'dayjs';
 import { useSelector } from 'react-redux';
 import { hasPermission } from '../utils/roles';
 import { PERMISSIONS } from '../utils/roles';
-import api from '../services/api';
+import { apiServices } from '../services/api';
+import { Bar, Line, Pie } from 'react-chartjs-2';
+import {
+  Chart as ChartJS,
+  CategoryScale,
+  LinearScale,
+  PointElement,
+  LineElement,
+  BarElement,
+  ArcElement,
+  Title,
+  Tooltip,
+  Legend,
+} from 'chart.js';
 
+ChartJS.register(
+  CategoryScale,
+  LinearScale,
+  PointElement,
+  LineElement,
+  BarElement,
+  ArcElement,
+  Title,
+  Tooltip,
+  Legend
+);
 
 const PREDEFINED_REPORTS = [
   { id: 1, name: 'Aylık Satış Raporu', type: 'sales', icon: <LineChartIcon /> },
@@ -60,7 +92,6 @@ const PREDEFINED_REPORTS = [
   { id: 5, name: 'Tedarikçi Performans Raporu', type: 'supplier', icon: <StoreIcon /> }
 ];
 
-
 const REPORT_TYPES = [
   { value: 'sales', label: 'Satış Raporları', icon: <ShoppingCartIcon /> },
   { value: 'inventory', label: 'Envanter Raporları', icon: <InventoryIcon /> },
@@ -69,32 +100,17 @@ const REPORT_TYPES = [
   { value: 'supplier', label: 'Tedarikçi Raporları', icon: <StoreIcon /> }
 ];
 
-
-const mockChartData = {
-  salesByMonth: {
-    labels: ['Ocak', 'Şubat', 'Mart', 'Nisan', 'Mayıs'],
-    values: [45000, 52000, 48000, 60000, 57000]
-  },
-  salesByCategory: {
-    labels: ['Elektronik', 'Giyim', 'Ev & Yaşam', 'Kitap', 'Spor'],
-    values: [38000, 25000, 18000, 12000, 7000]
-  },
-  inventoryLevels: {
-    labels: ['Elektronik', 'Giyim', 'Ev & Yaşam', 'Kitap', 'Spor'],
-    values: [120, 85, 65, 200, 45]
-  }
-};
-
 const Reports = () => {
   const { user } = useSelector(state => state.auth);
   const canViewReports = hasPermission(user?.role, PERMISSIONS.VIEW_REPORTS);
-  
+
   const [activeTab, setActiveTab] = useState(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [selectedReport, setSelectedReport] = useState(null);
-  
-  
+  const [reportData, setReportData] = useState(null);
+  const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
+
   const [reportForm, setReportForm] = useState({
     type: '',
     name: '',
@@ -102,28 +118,90 @@ const Reports = () => {
     endDate: dayjs(),
     format: 'pdf'
   });
-  
-  
-  const [reportHistory, setReportHistory] = useState([
-    { id: 101, name: 'Mayıs Satış Raporu', type: 'sales', createdAt: '2023-06-01T10:30:00', format: 'pdf' },
-    { id: 102, name: 'Q2 Envanter Raporu', type: 'inventory', createdAt: '2023-06-01T11:45:00', format: 'excel' },
-    { id: 103, name: 'Yıllık Kategori Analizi', type: 'category', createdAt: '2023-05-31T09:15:00', format: 'pdf' }
-  ]);
-  
+
+  const [reportHistory, setReportHistory] = useState([]);
+
+  useEffect(() => {
+    if (activeTab === 2 || reportHistory.length === 0) {
+      fetchReportHistory();
+    }
+  }, [activeTab]);
+
+  const fetchReportHistory = async () => {
+    try {
+      setLoading(true);
+      try {
+        const response = await apiServices.reports.getAll();
+        setReportHistory(response.data.data || []);
+        setError(null);
+      } catch (err) {
+        console.error('Error fetching reports:', err);
+        setError(`${err.message || 'Unknown error'}`);
+        setReportHistory([]);
+      }
+    } catch (err) {
+      console.error('Unexpected error in fetchReportHistory:', err);
+      setError('An unexpected error occurred');
+      setReportHistory([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleTabChange = (event, newValue) => {
     setActiveTab(newValue);
   };
-  
-  const handleReportSelect = (report) => {
-    setSelectedReport(report);
-    setLoading(true);
-    
-    
-    setTimeout(() => {
+
+  const handleReportSelect = async (report) => {
+    try {
+      setSelectedReport(report);
+      setLoading(true);
+
+      if (report.id && typeof report.id === 'number' && report.id <= 5) {
+
+        const parameters = {
+          start_date: dayjs().subtract(30, 'day').format('YYYY-MM-DD'),
+          end_date: dayjs().format('YYYY-MM-DD')
+        };
+
+        try {
+          const response = await apiServices.reports.create({
+            name: report.name,
+            type: report.type,
+            parameters,
+            format: 'pdf'
+          });
+
+          setSelectedReport(response.data);
+          setReportData(response.data.data);
+        } catch (createErr) {
+          console.error('Error creating report:', createErr);
+
+          setError(`Error creating report: ${createErr.message || 'Unknown error'}`);
+
+          setReportData(getMockDataForReportType(report.type));
+        }
+      } else {
+
+        try {
+          const response = await apiServices.reports.getById(report.id);
+          setReportData(response.data.data);
+        } catch (fetchErr) {
+          console.error('Error fetching report:', fetchErr);
+          setError(`Error loading report: ${fetchErr.message || 'Unknown error'}`);
+
+          setReportData(getMockDataForReportType(report.type));
+        }
+      }
+    } catch (err) {
+      console.error('Error in report selection:', err);
+      setError(`Error with report: ${err.message || 'Unknown error'}`);
+      setReportData(null);
+    } finally {
       setLoading(false);
-    }, 1000);
+    }
   };
-  
+
   const handleReportFormChange = (e) => {
     const { name, value } = e.target;
     setReportForm({
@@ -131,39 +209,48 @@ const Reports = () => {
       [name]: value
     });
   };
-  
+
   const handleDateChange = (name, date) => {
     setReportForm({
       ...reportForm,
       [name]: date
     });
   };
-  
-  const handleGenerateReport = () => {
+
+  const handleGenerateReport = async () => {
     if (!reportForm.type || !reportForm.name) {
       setError('Lütfen rapor türü ve adını girin.');
       return;
     }
-    
-    setLoading(true);
-    
-    
-    setTimeout(() => {
-      const newReport = {
-        id: Math.floor(Math.random() * 1000),
+
+    try {
+      setLoading(true);
+
+      const parameters = {
+        start_date: reportForm.startDate.format('YYYY-MM-DD'),
+        end_date: reportForm.endDate.format('YYYY-MM-DD')
+      };
+
+      const response = await apiServices.reports.create({
         name: reportForm.name,
         type: reportForm.type,
-        createdAt: new Date().toISOString(),
+        parameters,
         format: reportForm.format
-      };
-      
-      setReportHistory([newReport, ...reportHistory]);
-      setLoading(false);
-      setSelectedReport(newReport);
-      setActiveTab(2); 
+      });
+
+      await fetchReportHistory();
+
+      setSelectedReport(response.data);
+      setReportData(response.data.data);
+      setActiveTab(2);
       setError(null);
-      
-      
+
+      setSnackbar({
+        open: true,
+        message: 'Report generated successfully',
+        severity: 'success'
+      });
+
       setReportForm({
         type: '',
         name: '',
@@ -171,27 +258,147 @@ const Reports = () => {
         endDate: dayjs(),
         format: 'pdf'
       });
-    }, 1500);
+
+    } catch (err) {
+      console.error('Error generating report:', err);
+      setError(`Error generating report: ${err.message || 'Unknown error'}`);
+      setSnackbar({
+        open: true,
+        message: `Error generating report: ${err.message || 'Unknown error'}`,
+        severity: 'error'
+      });
+    } finally {
+      setLoading(false);
+    }
   };
-  
+
+  const handleDeleteReport = async (reportId) => {
+    try {
+      setLoading(true);
+      await apiServices.reports.delete(reportId);
+
+      await fetchReportHistory();
+
+      if (selectedReport && selectedReport.id === reportId) {
+        setSelectedReport(null);
+        setReportData(null);
+      }
+
+      setSnackbar({
+        open: true,
+        message: 'Report deleted successfully',
+        severity: 'success'
+      });
+
+    } catch (err) {
+      console.error('Error deleting report:', err);
+      setSnackbar({
+        open: true,
+        message: `Error deleting report: ${err.message || 'Unknown error'}`,
+        severity: 'error'
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleDownloadReport = (report) => {
-    
-    console.log(`Downloading report: ${report.name} (ID: ${report.id})`);
+
+    let csvContent = '';
+    let filename = '';
+
+    switch (report.type) {
+      case 'sales':
+        filename = `sales-report-${report.id}.csv`;
+        csvContent = 'Month,Total Sales,Order Count\n';
+        if (reportData && reportData.salesByMonth) {
+          reportData.salesByMonth.labels.forEach((month, index) => {
+            csvContent += `${month},${reportData.salesByMonth.values[index]},${reportData.summary.totalOrders}\n`;
+          });
+        }
+        break;
+
+      case 'inventory':
+        filename = `inventory-report-${report.id}.csv`;
+        csvContent = 'Category,Product Count,Total Stock,Average Price\n';
+        if (reportData && reportData.stockByCategory) {
+          reportData.stockByCategory.labels.forEach((category, index) => {
+            const categoryData = reportData.categoryDetails ?
+              reportData.categoryDetails.find(c => c.category_name === category) : null;
+            csvContent += `${category},${categoryData?.product_count || 0},${reportData.stockByCategory.values[index]},${categoryData?.average_price || 0}\n`;
+          });
+        }
+        break;
+
+      case 'category':
+        filename = `category-report-${report.id}.csv`;
+        csvContent = 'Category,Product Count,Total Stock,Inventory Value\n';
+        if (reportData && reportData.categoryDetails) {
+          reportData.categoryDetails.forEach(category => {
+            csvContent += `${category.category_name},${category.product_count},${category.total_stock},${category.inventory_value}\n`;
+          });
+        }
+        break;
+
+      case 'customer':
+        filename = `customer-report-${report.id}.csv`;
+        csvContent = 'Customer,Email,Order Count,Total Spent\n';
+        if (reportData && reportData.topCustomers) {
+          reportData.topCustomers.forEach(customer => {
+            csvContent += `${customer.name},${customer.email},${customer.order_count},${customer.total_spent}\n`;
+          });
+        }
+        break;
+
+      case 'supplier':
+        filename = `supplier-report-${report.id}.csv`;
+        csvContent = 'Supplier,Email,Order Count,Total Spent\n';
+        if (reportData && reportData.topSuppliers) {
+          reportData.topSuppliers.forEach(supplier => {
+            csvContent += `${supplier.name},${supplier.email},${supplier.order_count || 0},${supplier.total_spent || 0}\n`;
+          });
+        }
+        break;
+
+      default:
+        filename = `report-${report.id}.csv`;
+        csvContent = 'No data';
+    }
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.setAttribute('href', url);
+    link.setAttribute('download', filename);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+
+    setSnackbar({
+      open: true,
+      message: `Downloading report: ${report.name}`,
+      severity: 'success'
+    });
   };
-  
+
+  const handleCloseSnackbar = () => {
+    setSnackbar({ ...snackbar, open: false });
+  };
+
   const getReportTypeIcon = (type) => {
     const reportType = REPORT_TYPES.find(rt => rt.value === type);
     return reportType ? reportType.icon : <TableIcon />;
   };
-  
+
   const getReportTypeLabel = (type) => {
     const reportType = REPORT_TYPES.find(rt => rt.value === type);
     return reportType ? reportType.label : type;
   };
-  
+
   const getFormatChip = (format) => {
     let color;
-    
+
     switch (format.toLowerCase()) {
       case 'pdf':
         color = 'error';
@@ -205,7 +412,7 @@ const Reports = () => {
       default:
         color = 'default';
     }
-    
+
     return (
       <Chip
         label={format.toUpperCase()}
@@ -214,7 +421,288 @@ const Reports = () => {
       />
     );
   };
-  
+
+  const getMockDataForReportType = (type) => {
+    switch (type) {
+      case 'sales':
+        return {
+          salesByMonth: { labels: ['No Data'], values: [0] },
+          topProducts: [],
+          summary: { totalSales: 0, totalOrders: 0 }
+        };
+      case 'inventory':
+        return {
+          stockByCategory: { labels: ['No Data'], values: [0] },
+          lowStockProducts: [],
+          summary: { totalProducts: 0, totalStock: 0, lowStockCount: 0 }
+        };
+      case 'category':
+        return {
+          categoryAnalysis: { labels: ['No Data'], values: [0] },
+          categoryDetails: [],
+          summary: { totalCategories: 0, totalInventoryValue: 0 }
+        };
+      case 'customer':
+        return {
+          topCustomers: [],
+          summary: { totalCustomersCount: 0, totalRevenue: 0 }
+        };
+      case 'supplier':
+        return {
+          topSuppliers: [],
+          summary: { totalSuppliersCount: 0, totalSpent: 0 }
+        };
+      default:
+        return {};
+    }
+  };
+
+  const renderCharts = () => {
+    if (!reportData) return null;
+
+    if (reportData.error) {
+      return (
+        <Box sx={{ p: 2 }}>
+          <Alert severity="error" sx={{ mb: 2 }}>
+            Error fetching report data: {reportData.error}
+          </Alert>
+          <Typography variant="body1">
+            Unable to display the report chart due to an error.
+          </Typography>
+        </Box>
+      );
+    }
+
+    switch (selectedReport.type) {
+      case 'sales':
+        return (
+          <Box sx={{ p: 2 }}>
+            <Typography variant="h6" gutterBottom>Sales Over Time</Typography>
+            <Box sx={{ height: 300, mb: 4 }}>
+              <Line
+                data={{
+                  labels: reportData.salesByMonth.labels,
+                  datasets: [
+                    {
+                      label: 'Sales',
+                      data: reportData.salesByMonth.values,
+                      backgroundColor: 'rgba(53, 162, 235, 0.5)',
+                      borderColor: 'rgb(53, 162, 235)',
+                    }
+                  ]
+                }}
+                options={{
+                  responsive: true,
+                  maintainAspectRatio: false,
+                }}
+              />
+            </Box>
+
+            <Typography variant="h6" gutterBottom>Top Products</Typography>
+            <TableContainer component={Paper} variant="outlined">
+              <Table size="small">
+                <TableHead>
+                  <TableRow>
+                    <TableCell>Product</TableCell>
+                    <TableCell align="right">Quantity Sold</TableCell>
+                    <TableCell align="right">Total Sales</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {reportData.topProducts.map((product, index) => (
+                    <TableRow key={index}>
+                      <TableCell>{product.product_name}</TableCell>
+                      <TableCell align="right">{product.quantity_sold}</TableCell>
+                      <TableCell align="right">${parseFloat(product.total_sales).toFixed(2)}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          </Box>
+        );
+
+      case 'inventory':
+        return (
+          <Box sx={{ p: 2 }}>
+            <Typography variant="h6" gutterBottom>Stock by Category</Typography>
+            <Box sx={{ height: 300, mb: 4 }}>
+              <Bar
+                data={{
+                  labels: reportData.stockByCategory.labels,
+                  datasets: [
+                    {
+                      label: 'Total Stock',
+                      data: reportData.stockByCategory.values,
+                      backgroundColor: 'rgba(75, 192, 192, 0.5)',
+                      borderColor: 'rgb(75, 192, 192)',
+                    }
+                  ]
+                }}
+                options={{
+                  responsive: true,
+                  maintainAspectRatio: false,
+                }}
+              />
+            </Box>
+
+            <Typography variant="h6" gutterBottom>Low Stock Products</Typography>
+            <TableContainer component={Paper} variant="outlined">
+              <Table size="small">
+                <TableHead>
+                  <TableRow>
+                    <TableCell>Product</TableCell>
+                    <TableCell>Category</TableCell>
+                    <TableCell align="right">Stock</TableCell>
+                    <TableCell align="right">Price</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {reportData.lowStockProducts.map((product) => (
+                    <TableRow key={product.id}>
+                      <TableCell>{product.name}</TableCell>
+                      <TableCell>{product.category_name}</TableCell>
+                      <TableCell align="right">{product.stock_quantity}</TableCell>
+                      <TableCell align="right">${parseFloat(product.price).toFixed(2)}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          </Box>
+        );
+
+      case 'category':
+        return (
+          <Box sx={{ p: 2 }}>
+            <Typography variant="h6" gutterBottom>Category Analysis</Typography>
+            <Box sx={{ height: 300, mb: 4 }}>
+              <Pie
+                data={{
+                  labels: reportData.categoryAnalysis.labels,
+                  datasets: [
+                    {
+                      label: 'Inventory Value',
+                      data: reportData.categoryAnalysis.values,
+                      backgroundColor: [
+                        'rgba(255, 99, 132, 0.5)',
+                        'rgba(54, 162, 235, 0.5)',
+                        'rgba(255, 206, 86, 0.5)',
+                        'rgba(75, 192, 192, 0.5)',
+                        'rgba(153, 102, 255, 0.5)',
+                        'rgba(255, 159, 64, 0.5)',
+                      ],
+                      borderColor: [
+                        'rgba(255, 99, 132, 1)',
+                        'rgba(54, 162, 235, 1)',
+                        'rgba(255, 206, 86, 1)',
+                        'rgba(75, 192, 192, 1)',
+                        'rgba(153, 102, 255, 1)',
+                        'rgba(255, 159, 64, 1)',
+                      ],
+                    }
+                  ]
+                }}
+                options={{
+                  responsive: true,
+                  maintainAspectRatio: false,
+                }}
+              />
+            </Box>
+
+            <Typography variant="h6" gutterBottom>Category Details</Typography>
+            <TableContainer component={Paper} variant="outlined">
+              <Table size="small">
+                <TableHead>
+                  <TableRow>
+                    <TableCell>Category</TableCell>
+                    <TableCell align="right">Products</TableCell>
+                    <TableCell align="right">Total Stock</TableCell>
+                    <TableCell align="right">Inventory Value</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {reportData.categoryDetails.map((category, index) => (
+                    <TableRow key={index}>
+                      <TableCell>{category.category_name}</TableCell>
+                      <TableCell align="right">{category.product_count}</TableCell>
+                      <TableCell align="right">{category.total_stock}</TableCell>
+                      <TableCell align="right">${parseFloat(category.inventory_value).toFixed(2)}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          </Box>
+        );
+
+      case 'customer':
+        return (
+          <Box sx={{ p: 2 }}>
+            <Typography variant="h6" gutterBottom>Top Customers</Typography>
+            <TableContainer component={Paper} variant="outlined">
+              <Table size="small">
+                <TableHead>
+                  <TableRow>
+                    <TableCell>Customer</TableCell>
+                    <TableCell>Email</TableCell>
+                    <TableCell align="right">Orders</TableCell>
+                    <TableCell align="right">Total Spent</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {reportData.topCustomers.map((customer) => (
+                    <TableRow key={customer.id}>
+                      <TableCell>{customer.name}</TableCell>
+                      <TableCell>{customer.email}</TableCell>
+                      <TableCell align="right">{customer.order_count}</TableCell>
+                      <TableCell align="right">${parseFloat(customer.total_spent).toFixed(2)}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          </Box>
+        );
+
+      case 'supplier':
+        return (
+          <Box sx={{ p: 2 }}>
+            <Typography variant="h6" gutterBottom>Top Suppliers</Typography>
+            <TableContainer component={Paper} variant="outlined">
+              <Table size="small">
+                <TableHead>
+                  <TableRow>
+                    <TableCell>Supplier</TableCell>
+                    <TableCell>Email</TableCell>
+                    <TableCell align="right">Orders</TableCell>
+                    <TableCell align="right">Total Spent</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {reportData.topSuppliers.map((supplier) => (
+                    <TableRow key={supplier.id}>
+                      <TableCell>{supplier.name}</TableCell>
+                      <TableCell>{supplier.email}</TableCell>
+                      <TableCell align="right">{supplier.order_count}</TableCell>
+                      <TableCell align="right">${parseFloat(supplier.total_spent).toFixed(2)}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          </Box>
+        );
+
+      default:
+        return (
+          <Box sx={{ p: 2 }}>
+            <Alert severity="info">No data to display for this report type.</Alert>
+          </Box>
+        );
+    }
+  };
+
   if (!canViewReports) {
     return (
       <Box sx={{ p: 3 }}>
@@ -224,13 +712,13 @@ const Reports = () => {
       </Box>
     );
   }
-  
+
   return (
     <Box sx={{ p: 3 }}>
       <Typography variant="h5" component="h1" fontWeight="bold" sx={{ mb: 3 }}>
         Raporlar
       </Typography>
-      
+
       <Paper sx={{ mb: 3 }}>
         <Tabs
           value={activeTab}
@@ -244,8 +732,8 @@ const Reports = () => {
           <Tab label="Rapor Geçmişi" />
         </Tabs>
       </Paper>
-      
-      
+
+      {/* Tab 1: Predefined Reports */}
       {activeTab === 0 && (
         <Grid container spacing={3}>
           <Grid item xs={12} md={4}>
@@ -284,7 +772,7 @@ const Reports = () => {
                         {selectedReport.name}
                       </Typography>
                       <Box>
-                        <IconButton color="primary" title="İndir">
+                        <IconButton color="primary" title="İndir" onClick={() => handleDownloadReport(selectedReport)}>
                           <DownloadIcon />
                         </IconButton>
                         <IconButton color="primary" title="Yazdır">
@@ -296,18 +784,16 @@ const Reports = () => {
                       </Box>
                     </Box>
                     <Divider sx={{ mb: 2 }} />
-                    <Box sx={{ p: 2, height: '300px', bgcolor: 'background.default', borderRadius: 1 }}>
-                      <Typography variant="body2" color="text.secondary" sx={{ textAlign: 'center' }}>
-                        Burada rapor grafiği görüntülenecektir. Bu bir demo uygulamasıdır.
+
+                    {error ? (
+                      <Alert severity="error">{error}</Alert>
+                    ) : reportData ? (
+                      renderCharts()
+                    ) : (
+                      <Typography variant="body2" color="text.secondary" sx={{ textAlign: 'center', p: 4 }}>
+                        No data available for this report.
                       </Typography>
-                      <Box sx={{ mt: 2, height: '80%', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
-                        {selectedReport.type === 'sales' && <LineChartIcon sx={{ fontSize: 100, color: 'text.secondary' }} />}
-                        {selectedReport.type === 'category' && <PieChartIcon sx={{ fontSize: 100, color: 'text.secondary' }} />}
-                        {selectedReport.type === 'inventory' && <BarChartIcon sx={{ fontSize: 100, color: 'text.secondary' }} />}
-                        {selectedReport.type === 'customer' && <GroupIcon sx={{ fontSize: 100, color: 'text.secondary' }} />}
-                        {selectedReport.type === 'supplier' && <StoreIcon sx={{ fontSize: 100, color: 'text.secondary' }} />}
-                      </Box>
-                    </Box>
+                    )}
                   </>
                 )
               ) : (
@@ -321,20 +807,20 @@ const Reports = () => {
           </Grid>
         </Grid>
       )}
-      
-      
+
+      {/* Tab 2: New Report */}
       {activeTab === 1 && (
         <Paper sx={{ p: 3 }}>
           <Typography variant="h6" gutterBottom>
             Yeni Rapor Oluştur
           </Typography>
-          
+
           {error && (
             <Alert severity="error" sx={{ mb: 2 }}>
               {error}
             </Alert>
           )}
-          
+
           <Grid container spacing={3}>
             <Grid item xs={12} md={6}>
               <FormControl fullWidth required>
@@ -414,46 +900,68 @@ const Reports = () => {
           </Grid>
         </Paper>
       )}
-      
-      
+
+      {/* Tab 3: Report History */}
       {activeTab === 2 && (
         <Paper sx={{ p: 2 }}>
           <Typography variant="subtitle1" fontWeight="bold" sx={{ mb: 2 }}>
             Oluşturulan Raporlar
           </Typography>
-          
-          <List>
-            {reportHistory.length > 0 ? (
-              reportHistory.map((report) => (
-                <ListItem
-                  key={report.id}
-                  button
-                  selected={selectedReport?.id === report.id}
-                  onClick={() => handleReportSelect(report)}
-                >
-                  <ListItemIcon>
-                    {getReportTypeIcon(report.type)}
-                  </ListItemIcon>
-                  <ListItemText 
-                    primary={report.name} 
-                    secondary={`${new Date(report.createdAt).toLocaleString('tr-TR')}`} 
-                  />
-                  <ListItemSecondaryAction sx={{ display: 'flex', alignItems: 'center' }}>
-                    {getFormatChip(report.format)}
-                    <IconButton edge="end" onClick={() => handleDownloadReport(report)}>
-                      <DownloadIcon />
-                    </IconButton>
-                  </ListItemSecondaryAction>
+
+          {loading ? (
+            <Box sx={{ display: 'flex', justifyContent: 'center', p: 4 }}>
+              <CircularProgress />
+            </Box>
+          ) : error ? (
+            <Alert severity="error">{error}</Alert>
+          ) : (
+            <List>
+              {reportHistory.length > 0 ? (
+                reportHistory.map((report) => (
+                  <ListItem
+                    key={report.id}
+                    button
+                    selected={selectedReport?.id === report.id}
+                    onClick={() => handleReportSelect(report)}
+                  >
+                    <ListItemIcon>
+                      {getReportTypeIcon(report.type)}
+                    </ListItemIcon>
+                    <ListItemText
+                      primary={report.name}
+                      secondary={`${new Date(report.created_at).toLocaleString('tr-TR')}`}
+                    />
+                    <ListItemSecondaryAction sx={{ display: 'flex', alignItems: 'center' }}>
+                      {getFormatChip(report.format)}
+                      <IconButton edge="end" onClick={() => handleDownloadReport(report)}>
+                        <DownloadIcon />
+                      </IconButton>
+                      <IconButton edge="end" color="error" onClick={() => handleDeleteReport(report.id)}>
+                        <DeleteIcon />
+                      </IconButton>
+                    </ListItemSecondaryAction>
+                  </ListItem>
+                ))
+              ) : (
+                <ListItem>
+                  <ListItemText primary="Henüz rapor oluşturulmadı." />
                 </ListItem>
-              ))
-            ) : (
-              <ListItem>
-                <ListItemText primary="Henüz rapor oluşturulmadı." />
-              </ListItem>
-            )}
-          </List>
+              )}
+            </List>
+          )}
         </Paper>
       )}
+
+      {/* Snackbar for notifications */}
+      <Snackbar
+        open={snackbar.open}
+        autoHideDuration={6000}
+        onClose={handleCloseSnackbar}
+      >
+        <Alert onClose={handleCloseSnackbar} severity={snackbar.severity}>
+          {snackbar.message}
+        </Alert>
+      </Snackbar>
     </Box>
   );
 };

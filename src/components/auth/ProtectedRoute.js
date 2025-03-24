@@ -15,24 +15,20 @@ const ProtectedRoute = ({ children, requiredPermissions }) => {
   const { isAuthenticated, user } = useSelector(state => state.auth);
   const location = useLocation();
 
-  
   if (!isAuthenticated) {
     return <Navigate to="/login" state={{ from: location.pathname }} replace />;
   }
 
-  
   if (requiredPermissions) {
     const hasAccess = Array.isArray(requiredPermissions)
       ? requiredPermissions.some(permission => hasPermission(user?.role, permission))
       : hasPermission(user?.role, requiredPermissions);
 
-    
     if (!hasAccess) {
       return <Navigate to="/unauthorized" replace />;
     }
   }
 
-  
   return children;
 };
 

@@ -19,53 +19,49 @@ import {
 import { authService } from '../services/api';
 
 const ForgotPassword = () => {
-  
+
   const [email, setEmail] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [validationError, setValidationError] = useState('');
 
-  
   const handleEmailChange = (e) => {
     setEmail(e.target.value);
     setValidationError('');
     setError('');
   };
 
-  
   const validateForm = () => {
     if (!email) {
       setValidationError('E-posta adresi gereklidir.');
       return false;
     }
-    
+
     if (!/\S+@\S+\.\S+/.test(email)) {
       setValidationError('Geçerli bir e-posta adresi giriniz.');
       return false;
     }
-    
+
     return true;
   };
 
-  
   const handleSubmit = async (e) => {
     e.preventDefault();
-    
-    
+
     if (!validateForm()) {
       return;
     }
-    
+
     setIsSubmitting(true);
     setError('');
     setSuccess('');
-    
+
     try {
-      
+
       const response = await authService.forgotPassword(email);
       setSuccess(response.message || 'Şifre sıfırlama bağlantısı e-posta adresinize gönderilmiştir.');
-      setEmail(''); 
+      setEmail('');
     } catch (err) {
       setError(err.message || 'Şifre sıfırlama isteği gönderilirken bir hata oluştu.');
     } finally {
@@ -108,27 +104,27 @@ const ForgotPassword = () => {
           >
             <LockOutlined />
           </Box>
-          
+
           <Typography component="h1" variant="h5" fontWeight="bold" gutterBottom>
             Şifre Sıfırlama
           </Typography>
-          
+
           <Typography variant="body2" color="text.secondary" align="center" sx={{ mb: 3 }}>
             Kayıtlı e-posta adresinizi girin, şifre sıfırlama bağlantısı göndereceğiz.
           </Typography>
-          
+
           {error && (
             <Alert severity="error" sx={{ width: '100%', mb: 2 }}>
               {error}
             </Alert>
           )}
-          
+
           {success && (
             <Alert severity="success" sx={{ width: '100%', mb: 2 }}>
               {success}
             </Alert>
           )}
-          
+
           <Box component="form" onSubmit={handleSubmit} sx={{ width: '100%' }}>
             <TextField
               margin="normal"
@@ -150,7 +146,7 @@ const ForgotPassword = () => {
                 ),
               }}
             />
-            
+
             <Button
               type="submit"
               fullWidth
@@ -160,7 +156,7 @@ const ForgotPassword = () => {
             >
               {isSubmitting ? <CircularProgress size={24} /> : 'Şifre Sıfırlama Bağlantısı Gönder'}
             </Button>
-            
+
             <Box sx={{ mt: 2, display: 'flex', justifyContent: 'center' }}>
               <Button
                 component={Link}

@@ -1,10 +1,8 @@
 const jwt = require('jsonwebtoken');
 const db = require('../config/db');
 
-
 const authenticateJWT = async (req, res, next) => {
   const authHeader = req.headers.authorization;
-
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
     return res.status(401).json({ message: 'Erişim yetkisi reddedildi. Token bulunamadı.' });
   }
@@ -13,15 +11,13 @@ const authenticateJWT = async (req, res, next) => {
 
   try {
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    
-    
+
     const user = await getUserWithRole(decoded.userId);
-    
+
     if (!user) {
       return res.status(401).json({ message: 'Geçersiz kullanıcı.' });
     }
-    
-    
+
     req.user = user;
     next();
   } catch (error) {
@@ -29,7 +25,6 @@ const authenticateJWT = async (req, res, next) => {
     return res.status(401).json({ message: 'Geçersiz veya süresi dolmuş token.' });
   }
 };
-
 
 const getUserWithRole = async (userId) => {
   try {
@@ -50,26 +45,24 @@ const getUserWithRole = async (userId) => {
       JOIN roles r ON u.role_id = r.id
       WHERE u.id = $1
     `;
-    
+
     const result = await db.query(query, [userId]);
-    
+
     if (result.rows.length === 0) {
       return null;
     }
-    
+
     const userData = result.rows[0];
-    
-    
+
     const permissionsQuery = `
       SELECT p.code
       FROM permissions p
       JOIN role_permissions rp ON p.id = rp.permission_id
       WHERE rp.role_id = $1
     `;
-    
+
     const permissionsResult = await db.query(permissionsQuery, [userData.role_id]);
-    
-    
+
     const user = {
       id: userData.id,
       email: userData.email,
@@ -86,7 +79,7 @@ const getUserWithRole = async (userId) => {
       },
       permissions: permissionsResult.rows.map(row => row.code)
     };
-    
+
     return user;
   } catch (error) {
     console.error('Error fetching user data:', error);
@@ -94,19 +87,17 @@ const getUserWithRole = async (userId) => {
   }
 };
 
-
 const checkPermission = (permission) => {
   return (req, res, next) => {
-    
+
     authenticateJWT(req, res, () => {
-      
+
       if (!req.user.permissions.includes(permission)) {
-        return res.status(403).json({ 
-          message: 'Bu işlemi gerçekleştirmek için yetkiniz yok.' 
+        return res.status(403).json({
+          message: 'Bu işlemi gerçekleştirmek için yetkiniz yok.'
         });
       }
-      
-      
+
       next();
     });
   };

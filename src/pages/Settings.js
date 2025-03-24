@@ -31,11 +31,11 @@ import { PERMISSIONS } from '../utils/roles';
 const Settings = () => {
   const { user } = useSelector(state => state.auth);
   const canManageSettings = hasPermission(user?.role?.code, PERMISSIONS.MANAGE_SETTINGS);
-  
+
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState(null);
-  
+
   const [generalSettings, setGeneralSettings] = useState({
     companyName: 'AI Stock Management System',
     language: 'en',
@@ -44,7 +44,7 @@ const Settings = () => {
     timezone: 'Europe/London',
     currency: 'USD'
   });
-  
+
   const [notificationSettings, setNotificationSettings] = useState({
     emailNotifications: true,
     lowStockAlerts: true,
@@ -53,14 +53,14 @@ const Settings = () => {
     marketingEmails: false,
     stockMovementAlerts: true
   });
-  
+
   const [securitySettings, setSecuritySettings] = useState({
     twoFactorAuth: false,
     sessionTimeout: '30',
     passwordExpiry: '90',
     loginAttempts: '5'
   });
-  
+
   const handleGeneralSettingsChange = (e) => {
     const { name, value } = e.target;
     setGeneralSettings({
@@ -68,7 +68,7 @@ const Settings = () => {
       [name]: value
     });
   };
-  
+
   const handleNotificationSettingsChange = (e) => {
     const { name, checked } = e.target;
     setNotificationSettings({
@@ -76,7 +76,7 @@ const Settings = () => {
       [name]: checked
     });
   };
-  
+
   const handleSecuritySettingsChange = (e) => {
     const { name, value, checked, type } = e.target;
     setSecuritySettings({
@@ -84,54 +84,51 @@ const Settings = () => {
       [name]: type === 'checkbox' ? checked : value
     });
   };
-  
+
   const handleSaveSettings = () => {
     if (!canManageSettings) {
       setError('You do not have permission to change settings.');
       return;
     }
-    
+
     setLoading(true);
     setError(null);
     setSuccess(false);
-    
-    
+
     setTimeout(() => {
       setLoading(false);
       setSuccess(true);
-      
-      
+
       setTimeout(() => {
         setSuccess(false);
       }, 3000);
     }, 1000);
   };
-  
+
   return (
     <Box sx={{ p: 3 }}>
       <Typography variant="h5" component="h1" fontWeight="bold" sx={{ mb: 3 }}>
         System Settings
       </Typography>
-      
+
       {error && (
         <Alert severity="error" sx={{ mb: 3 }}>
           {error}
         </Alert>
       )}
-      
+
       {success && (
         <Alert severity="success" sx={{ mb: 3 }} icon={<CheckIcon />}>
           Settings saved successfully.
         </Alert>
       )}
-      
-      
+
       <Paper sx={{ p: 3, mb: 3 }}>
         <Typography variant="h6" gutterBottom>
           General Settings
         </Typography>
         <Divider sx={{ mb: 3 }} />
-        
+
         <Grid container spacing={3}>
           <Grid item xs={12} md={6}>
             <TextField
@@ -228,14 +225,13 @@ const Settings = () => {
           </Grid>
         </Grid>
       </Paper>
-      
-      
+
       <Paper sx={{ p: 3, mb: 3 }}>
         <Typography variant="h6" gutterBottom>
           Notification Settings
         </Typography>
         <Divider sx={{ mb: 3 }} />
-        
+
         <FormGroup>
           <FormControlLabel
             control={
@@ -283,14 +279,13 @@ const Settings = () => {
           />
         </FormGroup>
       </Paper>
-      
-      
+
       <Paper sx={{ p: 3, mb: 3 }}>
         <Typography variant="h6" gutterBottom>
           Security Settings
         </Typography>
         <Divider sx={{ mb: 3 }} />
-        
+
         <Grid container spacing={3}>
           <Grid item xs={12}>
             <FormControlLabel
@@ -342,7 +337,7 @@ const Settings = () => {
           </Grid>
         </Grid>
       </Paper>
-      
+
       {canManageSettings && (
         <Box sx={{ display: 'flex', justifyContent: 'flex-end' }}>
           <Button

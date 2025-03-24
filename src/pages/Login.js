@@ -24,43 +24,35 @@ import { login, selectIsLoggedIn, selectIsLoading, selectError, clearError } fro
 const Login = () => {
   const navigate = useNavigate();
   const dispatch = useDispatch();
-  
-  
+
   const isLoggedIn = useSelector(selectIsLoggedIn);
   const isLoading = useSelector(selectIsLoading);
   const error = useSelector(selectError);
-  
-  
+
   const [formData, setFormData] = useState({
     email: '',
     password: '',
   });
-  
-  
+
   const [showPassword, setShowPassword] = useState(false);
-  
-  
   const [validationErrors, setValidationErrors] = useState({});
-  
-  
+  const [formError, setFormError] = useState(null);
+
   useEffect(() => {
     if (isLoggedIn) {
       navigate('/dashboard');
     }
-    
-    
+
     dispatch(clearError());
   }, [isLoggedIn, navigate, dispatch]);
-  
-  
+
   const handleChange = (e) => {
     const { name, value } = e.target;
     setFormData({
       ...formData,
       [name]: value,
     });
-    
-    
+
     if (validationErrors[name]) {
       setValidationErrors({
         ...validationErrors,
@@ -68,48 +60,49 @@ const Login = () => {
       });
     }
   };
-  
-  
+
   const handleTogglePasswordVisibility = () => {
     setShowPassword(!showPassword);
   };
-  
-  
+
   const validateForm = () => {
     const errors = {};
-    
-    
+
     if (!formData.email) {
       errors.email = 'Email address is required';
     } else if (!/\S+@\S+\.\S+/.test(formData.email)) {
       errors.email = 'Enter a valid email address';
     }
-    
-    
+
     if (!formData.password) {
       errors.password = 'Password is required';
     }
-    
+
     setValidationErrors(errors);
     return Object.keys(errors).length === 0;
   };
-  
-  
-  const handleSubmit = (e) => {
+
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    
-    
+
     if (!validateForm()) {
       return;
     }
-    
-    
-    dispatch(login({
-      email: formData.email,
-      password: formData.password,
-    }));
+
+    try {
+      setFormError(null);
+      
+      await dispatch(login({
+        email: formData.email,
+        password: formData.password
+      }));
+      
+      // Navigation will happen in the useEffect when isLoggedIn updates
+    } catch (error) {
+      setFormError(error.response?.data?.message || 'Login failed. Please check your credentials.');
+    }
   };
-  
+
   return (
     <Container component="main" maxWidth="xs">
       <Box
@@ -145,21 +138,21 @@ const Login = () => {
           >
             <LockOutlined />
           </Box>
-          
+
           <Typography component="h1" variant="h5" fontWeight="bold" gutterBottom>
             Login
           </Typography>
-          
+
           <Typography variant="body2" color="text.secondary" align="center" sx={{ mb: 3 }}>
             Welcome to AI Stock Management System
           </Typography>
-          
-          {error && (
+
+          {formError && (
             <Alert severity="error" sx={{ width: '100%', mb: 2 }}>
-              {error}
+              {formError}
             </Alert>
           )}
-          
+
           <Box component="form" onSubmit={handleSubmit} sx={{ width: '100%' }}>
             <TextField
               margin="normal"
@@ -176,7 +169,7 @@ const Login = () => {
               helperText={validationErrors.email}
               disabled={isLoading}
             />
-            
+
             <TextField
               margin="normal"
               required
@@ -205,7 +198,7 @@ const Login = () => {
                 ),
               }}
             />
-            
+
             <Button
               type="submit"
               fullWidth
@@ -215,11 +208,11 @@ const Login = () => {
             >
               {isLoading ? <CircularProgress size={24} /> : 'Login'}
             </Button>
-            
+
             <Box sx={{ mt: 2, textAlign: 'center' }}>
-              <Link 
-                component={RouterLink} 
-                to="/forgot-password" 
+              <Link
+                component={RouterLink}
+                to="/forgot-password"
                 variant="body2"
               >
                 Forgot your password?

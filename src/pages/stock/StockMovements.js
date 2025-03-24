@@ -44,7 +44,6 @@ import { hasPermission } from '../../utils/roles';
 import { PERMISSIONS } from '../../utils/roles';
 import api from '../../services/api';
 
-
 const MOVEMENT_TYPES = {
   RECEIPT: 'receipt',
   SALE: 'sale',
@@ -55,7 +54,6 @@ const MOVEMENT_TYPES = {
   WASTE: 'waste'
 };
 
-
 const MOVEMENT_TYPE_LABELS = {
   [MOVEMENT_TYPES.RECEIPT]: 'Receipt',
   [MOVEMENT_TYPES.SALE]: 'Sale',
@@ -65,7 +63,6 @@ const MOVEMENT_TYPE_LABELS = {
   [MOVEMENT_TYPES.ADJUSTMENT_REMOVE]: 'Adjustment (-)',
   [MOVEMENT_TYPES.WASTE]: 'Waste'
 };
-
 
 const MOVEMENT_REASONS = {
   SUPPLY: 'Supply',
@@ -80,28 +77,25 @@ const MOVEMENT_REASONS = {
 const StockMovements = () => {
   const { user } = useSelector(state => state.auth);
   const canManageStockMovements = hasPermission(user?.role, PERMISSIONS.MANAGE_STOCK_MOVEMENTS);
-  
+
   const [stockMovements, setStockMovements] = useState([]);
   const [filteredMovements, setFilteredMovements] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [products, setProducts] = useState([]);
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
-  
-  
+
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(10);
   const [totalCount, setTotalCount] = useState(0);
-  
-  
+
   const [filters, setFilters] = useState({
     search: '',
     type: '',
     startDate: null,
     endDate: null
   });
-  
-  
+
   const [openDialog, setOpenDialog] = useState(false);
   const [formData, setFormData] = useState({
     product_id: '',
@@ -109,8 +103,7 @@ const StockMovements = () => {
     quantity: 1,
     notes: ''
   });
-  
-  
+
   const fetchStockMovements = async () => {
     setLoading(true);
     try {
@@ -118,14 +111,14 @@ const StockMovements = () => {
         limit: rowsPerPage,
         offset: page * rowsPerPage
       };
-      
-      
+
       if (filters.type) params.type = filters.type;
       if (filters.startDate) params.start_date = filters.startDate.format('YYYY-MM-DD');
       if (filters.endDate) params.end_date = filters.endDate.format('YYYY-MM-DD');
-      
-      const response = await api.get('/stock-movements', params);
-      
+      if (filters.search) params.search = filters.search;
+
+      const response = await api.get('/stock-movements', { params });
+
       setStockMovements(response.data.data);
       setTotalCount(response.data.pagination.total);
       setFilteredMovements(response.data.data);
@@ -137,53 +130,50 @@ const StockMovements = () => {
       setLoading(false);
     }
   };
-  
-  
+
   const fetchProducts = async () => {
     try {
-      const response = await api.products.getAll();
+      const response = await api.get('/products');
       setProducts(response.data.data || []);
     } catch (error) {
       console.error('Error fetching products:', error);
     }
   };
-  
-  
+
   useEffect(() => {
     fetchProducts();
   }, []);
-  
-  
+
   useEffect(() => {
     fetchStockMovements();
   }, [page, rowsPerPage, filters]);
-  
+
   const handleChangePage = (event, newPage) => {
     setPage(newPage);
   };
-  
+
   const handleChangeRowsPerPage = (event) => {
     setRowsPerPage(parseInt(event.target.value, 10));
     setPage(0);
   };
-  
+
   const handleFilterChange = (e) => {
     const { name, value } = e.target;
     setFilters({
       ...filters,
       [name]: value
     });
-    setPage(0); 
+    setPage(0);
   };
-  
+
   const handleDateChange = (name, date) => {
     setFilters({
       ...filters,
       [name]: date
     });
-    setPage(0); 
+    setPage(0);
   };
-  
+
   const handleOpenAddDialog = () => {
     setFormData({
       product_id: '',
@@ -193,11 +183,11 @@ const StockMovements = () => {
     });
     setOpenDialog(true);
   };
-  
+
   const handleCloseDialog = () => {
     setOpenDialog(false);
   };
-  
+
   const handleFormChange = (e) => {
     const { name, value } = e.target;
     setFormData({
@@ -205,7 +195,7 @@ const StockMovements = () => {
       [name]: value
     });
   };
-  
+
   const handleSubmit = async () => {
     try {
       const movementData = {
@@ -214,18 +204,17 @@ const StockMovements = () => {
         type: formData.type,
         notes: formData.notes
       };
-      
-      await api.stockMovements.create(movementData);
-      
-      
+
+      await api.post('/stock-movements', movementData);
+
       fetchStockMovements();
-      
+
       setSnackbar({
         open: true,
         message: 'Stock movement created successfully',
         severity: 'success'
       });
-      
+
       handleCloseDialog();
     } catch (error) {
       console.error('Error creating stock movement:', error);
@@ -236,11 +225,11 @@ const StockMovements = () => {
       });
     }
   };
-  
+
   const handleCloseSnackbar = () => {
     setSnackbar({ ...snackbar, open: false });
   };
-  
+
   const getMovementTypeIcon = (type) => {
     if (type.includes('receipt') || type.includes('return_from') || type.includes('add')) {
       return <IncreaseIcon color="success" />;
@@ -250,11 +239,11 @@ const StockMovements = () => {
       return <TransferIcon color="primary" />;
     }
   };
-  
+
   const getMovementTypeChip = (type) => {
     const label = MOVEMENT_TYPE_LABELS[type] || type;
     let color;
-    
+
     if (type.includes('receipt') || type.includes('return_from') || type.includes('add')) {
       color = 'success';
     } else if (type.includes('sale') || type.includes('return_to') || type.includes('remove') || type.includes('waste')) {
@@ -262,7 +251,7 @@ const StockMovements = () => {
     } else {
       color = 'primary';
     }
-    
+
     return (
       <Chip
         icon={getMovementTypeIcon(type)}
@@ -273,14 +262,14 @@ const StockMovements = () => {
       />
     );
   };
-  
+
   return (
     <Box sx={{ p: 3 }}>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
         <Typography variant="h5" component="h1" fontWeight="bold">
           Stock Movements
         </Typography>
-        
+
         {canManageStockMovements && (
           <Button
             variant="contained"
@@ -292,13 +281,13 @@ const StockMovements = () => {
           </Button>
         )}
       </Box>
-      
+
       {/* Filters */}
       <Paper sx={{ p: 2, mb: 3 }}>
         <Typography variant="subtitle1" fontWeight="bold" sx={{ mb: 2 }}>
           Filters
         </Typography>
-        
+
         <Grid container spacing={2}>
           <Grid item xs={12} sm={6} md={3}>
             <TextField
@@ -354,7 +343,7 @@ const StockMovements = () => {
           </Grid>
         </Grid>
       </Paper>
-      
+
       {/* Stock Movements Table */}
       {loading ? (
         <Box sx={{ display: 'flex', justifyContent: 'center', p: 4 }}>
@@ -403,8 +392,8 @@ const StockMovements = () => {
                       {dayjs(movement.created_at).format('DD.MM.YYYY HH:mm')}
                     </TableCell>
                     <TableCell>
-                      {movement.first_name && movement.last_name 
-                        ? `${movement.first_name} ${movement.last_name}` 
+                      {movement.first_name && movement.last_name
+                        ? `${movement.first_name} ${movement.last_name}`
                         : 'Unknown'}
                     </TableCell>
                   </TableRow>
@@ -428,12 +417,12 @@ const StockMovements = () => {
             onPageChange={handleChangePage}
             onRowsPerPageChange={handleChangeRowsPerPage}
             labelRowsPerPage="Rows per page:"
-            labelDisplayedRows={({ from, to, count }) => 
+            labelDisplayedRows={({ from, to, count }) =>
               `${from}-${to} of ${count !== -1 ? count : `more than ${to}`}`}
           />
         </Paper>
       )}
-      
+
       {/* Add Stock Movement Dialog */}
       <Dialog open={openDialog} onClose={handleCloseDialog} maxWidth="md" fullWidth>
         <DialogTitle>
@@ -502,9 +491,9 @@ const StockMovements = () => {
         </DialogContent>
         <DialogActions>
           <Button onClick={handleCloseDialog}>Cancel</Button>
-          <Button 
-            onClick={handleSubmit} 
-            color="primary" 
+          <Button
+            onClick={handleSubmit}
+            color="primary"
             variant="contained"
             disabled={
               !formData.product_id ||

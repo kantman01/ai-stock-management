@@ -10,6 +10,7 @@ exports.getStockMovements = async (req, res) => {
       type,
       start_date,
       end_date,
+      search,
       sort_by = 'created_at',
       sort_dir = 'DESC',
       limit = 50,
@@ -29,7 +30,6 @@ exports.getStockMovements = async (req, res) => {
 
     const params = [];
 
-    
     if (product_id) {
       sql += ` AND sm.product_id = $${params.length + 1}`;
       params.push(product_id);
@@ -50,12 +50,15 @@ exports.getStockMovements = async (req, res) => {
       params.push(end_date);
     }
 
-    
+    if (search) {
+      sql += ` AND (p.name ILIKE $${params.length + 1} OR sm.notes ILIKE $${params.length + 1})`;
+      params.push(`%${search}%`);
+    }
+
     const countSql = sql.replace('SELECT sm.*, p.name as product_name, u.first_name, u.last_name', 'SELECT COUNT(*)');
     const countResult = await query(countSql, params);
     const total = parseInt(countResult.rows[0].count);
 
-    
     sql += ` ORDER BY ${sort_by} ${sort_dir} LIMIT $${params.length + 1} OFFSET $${params.length + 2}`;
     params.push(limit, offset);
 
@@ -123,36 +126,32 @@ exports.createStockMovement = async (req, res) => {
       return res.status(400).json({ message: 'Product ID, quantity, and movement type are required' });
     }
 
-    
     const productResult = await query('SELECT * FROM products WHERE id = $1', [product_id]);
-    
+
     if (productResult.rows.length === 0) {
       return res.status(404).json({ message: 'Product not found' });
     }
-    
+
     const product = productResult.rows[0];
     const previousQuantity = product.stock_quantity;
     let newQuantity;
-    
-    
+
     if (type === 'receipt' || type === 'return_from_customer' || type === 'adjustment_add') {
       newQuantity = previousQuantity + parseInt(quantity);
     } else if (type === 'sale' || type === 'return_to_supplier' || type === 'waste' || type === 'adjustment_remove') {
       newQuantity = previousQuantity - parseInt(quantity);
-      
-      
+
       if (newQuantity < 0) {
         return res.status(400).json({ message: 'Insufficient stock for this operation' });
       }
     } else {
       return res.status(400).json({ message: 'Invalid movement type' });
     }
-    
-    
+
     await query('BEGIN');
-    
+
     try {
-      
+
       const movementSql = `
         INSERT INTO stock_movements (
           product_id, 
@@ -166,7 +165,7 @@ exports.createStockMovement = async (req, res) => {
         VALUES ($1, $2, $3, $4, $5, $6, $7)
         RETURNING *
       `;
-      
+
       const movementResult = await query(movementSql, [
         product_id,
         quantity,
@@ -176,19 +175,17 @@ exports.createStockMovement = async (req, res) => {
         notes,
         req.user?.id || null
       ]);
-      
-      
+
       await query(
         'UPDATE products SET stock_quantity = $1, updated_at = NOW() WHERE id = $2',
         [newQuantity, product_id]
       );
-      
-      
+
       await query('COMMIT');
-      
+
       res.status(201).json(movementResult.rows[0]);
     } catch (err) {
-      
+
       await query('ROLLBACK');
       throw err;
     }
@@ -204,7 +201,7 @@ exports.createStockMovement = async (req, res) => {
 exports.getProductsWithMovements = async (req, res) => {
   try {
     const { limit = 10 } = req.query;
-    
+
     const sql = `
       SELECT 
         p.id, 
@@ -230,9 +227,9 @@ exports.getProductsWithMovements = async (req, res) => {
       ORDER BY p.updated_at DESC
       LIMIT $1
     `;
-    
+
     const result = await query(sql, [limit]);
-    
+
     res.json(result.rows);
   } catch (err) {
     console.error('Error fetching products with movements:', err);

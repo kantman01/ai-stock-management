@@ -46,7 +46,6 @@ import {
   Clear as ClearIcon
 } from '@mui/icons-material';
 
-
 import {
   fetchStockStart,
   fetchStockSuccess,
@@ -57,14 +56,12 @@ import {
   clearFilters
 } from '../../redux/slices/stockSlice';
 
-
 import api from '../../services/api';
 
 const Products = () => {
   const dispatch = useDispatch();
   const { items, filteredItems, isLoading, error, searchTerm, filters } = useSelector(state => state.stock);
-  
-  
+
   const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(false);
   const [apiError, setApiError] = useState(null);
@@ -75,7 +72,6 @@ const Products = () => {
     severity: 'success'
   });
 
-  
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(10);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
@@ -95,8 +91,7 @@ const Products = () => {
     min_stock_quantity: 0,
     is_active: true
   });
-  
-  
+
   useEffect(() => {
     const fetchCategories = async () => {
       try {
@@ -111,16 +106,15 @@ const Products = () => {
         setApiError('Categories could not be loaded');
       }
     };
-    
+
     fetchCategories();
   }, []);
-  
-  
+
   useEffect(() => {
     const fetchProducts = async () => {
       setLoading(true);
       dispatch(fetchStockStart());
-      
+
       try {
         const response = await api.get('/products', {
           params: {
@@ -134,7 +128,7 @@ const Products = () => {
             sort_dir: 'ASC'
           }
         });
-        
+
         dispatch(fetchStockSuccess(response.data.data));
         setTotalCount(response.data.pagination.total);
         setApiError(null);
@@ -146,28 +140,24 @@ const Products = () => {
         setLoading(false);
       }
     };
-    
+
     fetchProducts();
   }, [dispatch, page, rowsPerPage, searchTerm, filters]);
-  
-  
+
   const handleChangePage = (event, newPage) => {
     setPage(newPage);
   };
-  
-  
+
   const handleChangeRowsPerPage = (event) => {
     setRowsPerPage(parseInt(event.target.value, 10));
     setPage(0);
   };
-  
-  
+
   const handleSearch = (e) => {
     dispatch(setSearchTerm(e.target.value));
     setPage(0);
   };
-  
-  
+
   const handleFilterChange = (e) => {
     dispatch(setFilter({
       name: e.target.name,
@@ -175,27 +165,24 @@ const Products = () => {
     }));
     setPage(0);
   };
-  
-  
+
   const handleClearFilters = () => {
     dispatch(clearFilters());
     setPage(0);
   };
-  
-  
+
   const handleDeleteClick = (item) => {
     setItemToDelete(item);
     setDeleteDialogOpen(true);
   };
-  
+
   const handleDeleteConfirm = async () => {
     setLoading(true);
     try {
       await api.delete(`/products/${itemToDelete.id}`);
-      
-      
+
       dispatch(fetchStockSuccess(items.filter(item => item.id !== itemToDelete.id)));
-      
+
       setNotification({
         open: true,
         message: 'Product deleted successfully',
@@ -215,13 +202,12 @@ const Products = () => {
       setItemToDelete(null);
     }
   };
-  
+
   const handleDeleteCancel = () => {
     setDeleteDialogOpen(false);
     setItemToDelete(null);
   };
-  
-  
+
   const handleAddClick = () => {
     setFormData({
       name: '',
@@ -238,8 +224,7 @@ const Products = () => {
     });
     setAddDialogOpen(true);
   };
-  
-  
+
   const handleEditClick = (item) => {
     setFormData({
       id: item.id,
@@ -257,27 +242,26 @@ const Products = () => {
     });
     setEditDialogOpen(true);
   };
-  
+
   const handleInputChange = (e) => {
     const { name, value, type, checked } = e.target;
     setFormData({
       ...formData,
-      [name]: type === 'checkbox' 
-        ? checked 
-        : ['price', 'cost_price', 'tax_rate', 'stock_quantity', 'min_stock_quantity'].includes(name) 
-          ? parseFloat(value) 
+      [name]: type === 'checkbox'
+        ? checked
+        : ['price', 'cost_price', 'tax_rate', 'stock_quantity', 'min_stock_quantity'].includes(name)
+          ? parseFloat(value)
           : value
     });
   };
-  
+
   const handleAddSubmit = async () => {
     setLoading(true);
     try {
       const response = await api.post('/products', formData);
-      
-      
+
       dispatch(fetchStockSuccess([...items, response.data]));
-      
+
       setNotification({
         open: true,
         message: 'Product added successfully',
@@ -296,17 +280,16 @@ const Products = () => {
       setLoading(false);
     }
   };
-  
+
   const handleEditSubmit = async () => {
     setLoading(true);
     try {
       const response = await api.put(`/products/${formData.id}`, formData);
-      
-      
+
       dispatch(fetchStockSuccess(
         items.map(item => item.id === formData.id ? response.data : item)
       ));
-      
+
       setNotification({
         open: true,
         message: 'Product updated successfully',
@@ -325,38 +308,36 @@ const Products = () => {
       setLoading(false);
     }
   };
-  
+
   const handleDialogClose = () => {
     setEditDialogOpen(false);
     setAddDialogOpen(false);
   };
-  
+
   const handleNotificationClose = () => {
     setNotification({
       ...notification,
       open: false
     });
   };
-  
-  
+
   const getQuantityColor = (quantity) => {
     if (quantity <= 0) return 'error';
     if (quantity <= 5) return 'warning';
     return 'success';
   };
-  
+
   return (
     <Box sx={{ p: 3 }}>
       <Typography variant="h4" component="h1" gutterBottom>
         Product Management
       </Typography>
-      
-      
-      <Paper 
+
+      <Paper
         elevation={0}
-        sx={{ 
-          p: 2, 
-          mb: 3, 
+        sx={{
+          p: 2,
+          mb: 3,
           borderRadius: 2,
           boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
         }}
@@ -385,7 +366,7 @@ const Products = () => {
               }}
             />
           </Grid>
-          
+
           <Grid item xs={12} sm={2.5}>
             <FormControl fullWidth>
               <InputLabel>Category</InputLabel>
@@ -404,7 +385,7 @@ const Products = () => {
               </Select>
             </FormControl>
           </Grid>
-          
+
           <Grid item xs={12} sm={2.5}>
             <FormControl fullWidth>
               <InputLabel>Stock Status</InputLabel>
@@ -420,11 +401,11 @@ const Products = () => {
               </Select>
             </FormControl>
           </Grid>
-          
+
           <Grid item xs={12} sm={3} sx={{ display: 'flex', gap: 1 }}>
-            <Button 
-              variant="outlined" 
-              color="primary" 
+            <Button
+              variant="outlined"
+              color="primary"
               startIcon={<RefreshIcon />}
               onClick={handleClearFilters}
               size="medium"
@@ -432,10 +413,10 @@ const Products = () => {
             >
               Clear
             </Button>
-            
-            <Button 
-              variant="contained" 
-              color="primary" 
+
+            <Button
+              variant="contained"
+              color="primary"
               startIcon={<AddIcon />}
               onClick={handleAddClick}
               size="medium"
@@ -446,13 +427,11 @@ const Products = () => {
           </Grid>
         </Grid>
       </Paper>
-      
-      
+
       {apiError && (
         <Alert severity="error" sx={{ mb: 2 }}>{apiError}</Alert>
       )}
-      
-      
+
       <Card sx={{ borderRadius: 2, boxShadow: '0 2px 8px rgba(0,0,0,0.1)' }}>
         <CardContent sx={{ p: 0 }}>
           <TableContainer>
@@ -484,8 +463,8 @@ const Products = () => {
                 ) : items.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={7} align="center">
-                      {searchTerm || filters.category !== 'all' || filters.inStock !== 'all' 
-                        ? 'No products match your search criteria.' 
+                      {searchTerm || filters.category !== 'all' || filters.inStock !== 'all'
+                        ? 'No products match your search criteria.'
                         : 'No products have been added yet.'}
                     </TableCell>
                   </TableRow>
@@ -498,36 +477,36 @@ const Products = () => {
                       <TableCell>{item.sku}</TableCell>
                       <TableCell>{item.category_name}</TableCell>
                       <TableCell align="right">
-                        <Chip 
-                          label={item.stock_quantity} 
-                          color={getQuantityColor(item.stock_quantity)} 
+                        <Chip
+                          label={item.stock_quantity}
+                          color={getQuantityColor(item.stock_quantity)}
                           size="small"
                           variant="outlined"
                         />
                       </TableCell>
                       <TableCell align="right">${parseFloat(item.price).toFixed(2)}</TableCell>
                       <TableCell align="center">
-                        <Chip 
-                          label={item.is_active ? 'Active' : 'Inactive'} 
-                          color={item.is_active ? 'success' : 'default'} 
+                        <Chip
+                          label={item.is_active ? 'Active' : 'Inactive'}
+                          color={item.is_active ? 'success' : 'default'}
                           size="small"
                         />
                       </TableCell>
                       <TableCell align="center">
                         <Box sx={{ display: 'flex', justifyContent: 'center' }}>
                           <Tooltip title="Edit">
-                            <IconButton 
-                              size="small" 
-                              color="primary" 
+                            <IconButton
+                              size="small"
+                              color="primary"
                               onClick={() => handleEditClick(item)}
                             >
                               <EditIcon fontSize="small" />
                             </IconButton>
                           </Tooltip>
                           <Tooltip title="Delete">
-                            <IconButton 
-                              size="small" 
-                              color="error" 
+                            <IconButton
+                              size="small"
+                              color="error"
                               onClick={() => handleDeleteClick(item)}
                             >
                               <DeleteIcon fontSize="small" />
@@ -541,7 +520,7 @@ const Products = () => {
               </TableBody>
             </Table>
           </TableContainer>
-          
+
           <TablePagination
             rowsPerPageOptions={[5, 10, 25, 50]}
             component="div"
@@ -554,7 +533,7 @@ const Products = () => {
           />
         </CardContent>
       </Card>
-      
+
       <Dialog
         open={deleteDialogOpen}
         onClose={handleDeleteCancel}
@@ -573,9 +552,9 @@ const Products = () => {
           <Button onClick={handleDeleteCancel} color="primary">
             Cancel
           </Button>
-          <Button 
-            onClick={handleDeleteConfirm} 
-            color="error" 
+          <Button
+            onClick={handleDeleteConfirm}
+            color="error"
             autoFocus
             disabled={loading}
           >
@@ -583,10 +562,9 @@ const Products = () => {
           </Button>
         </DialogActions>
       </Dialog>
-      
-      
-      <Dialog 
-        open={addDialogOpen} 
+
+      <Dialog
+        open={addDialogOpen}
         onClose={handleDialogClose}
         fullWidth
         maxWidth="md"
@@ -735,9 +713,9 @@ const Products = () => {
           <Button onClick={handleDialogClose} color="primary">
             Cancel
           </Button>
-          <Button 
-            onClick={handleAddSubmit} 
-            color="primary" 
+          <Button
+            onClick={handleAddSubmit}
+            color="primary"
             variant="contained"
             disabled={loading || !formData.name || formData.price <= 0}
           >
@@ -745,10 +723,9 @@ const Products = () => {
           </Button>
         </DialogActions>
       </Dialog>
-      
-      
-      <Dialog 
-        open={editDialogOpen} 
+
+      <Dialog
+        open={editDialogOpen}
         onClose={handleDialogClose}
         fullWidth
         maxWidth="md"
@@ -887,9 +864,9 @@ const Products = () => {
           <Button onClick={handleDialogClose} color="primary">
             Cancel
           </Button>
-          <Button 
-            onClick={handleEditSubmit} 
-            color="primary" 
+          <Button
+            onClick={handleEditSubmit}
+            color="primary"
             variant="contained"
             disabled={loading || !formData.name || formData.price <= 0}
           >
@@ -897,16 +874,15 @@ const Products = () => {
           </Button>
         </DialogActions>
       </Dialog>
-      
-      
+
       <Snackbar
         open={notification.open}
         autoHideDuration={6000}
         onClose={handleNotificationClose}
         anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
       >
-        <Alert 
-          onClose={handleNotificationClose} 
+        <Alert
+          onClose={handleNotificationClose}
           severity={notification.severity}
         >
           {notification.message}

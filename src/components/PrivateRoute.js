@@ -11,28 +11,24 @@ import { selectIsLoggedIn, hasPermission } from '../redux/features/authSlice';
 const PrivateRoute = ({ children, requiredPermission }) => {
   const location = useLocation();
   const isLoggedIn = useSelector(selectIsLoggedIn);
-  const userHasPermission = useSelector((state) => 
+  const userHasPermission = useSelector((state) =>
     requiredPermission ? hasPermission(state, requiredPermission) : true
   );
-  
+
   if (!isLoggedIn) {
-    
+
     return <Navigate to="/login" state={{ from: location.pathname }} replace />;
   }
-  
-  
-  
-  
-  
-  
-  
+
+
+
+
   console.log('PrivateRoute - Permission check:', {
     requiredPermission,
     userHasPermission,
     path: location.pathname
   });
-  
-  
+
   return children;
 };
 

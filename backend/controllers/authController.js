@@ -3,9 +3,8 @@ const jwt = require('jsonwebtoken');
 const { validationResult } = require('express-validator');
 const db = require('../config/db');
 
-
 exports.login = async (req, res) => {
-  
+
   const errors = validationResult(req);
   if (!errors.isEmpty()) {
     return res.status(400).json({ errors: errors.array() });
@@ -14,7 +13,7 @@ exports.login = async (req, res) => {
   const { email, password } = req.body;
 
   try {
-    
+
     const userQuery = `
       SELECT 
         u.id, 
@@ -29,54 +28,48 @@ exports.login = async (req, res) => {
       JOIN roles r ON u.role_id = r.id
       WHERE u.email = $1
     `;
-    
+
     const userResult = await db.query(userQuery, [email]);
-    
+
     if (userResult.rows.length === 0) {
       return res.status(401).json({ message: 'Invalid email or password.' });
     }
-    
+
     const user = userResult.rows[0];
-    
-    
+
     if (!user.is_active) {
       return res.status(403).json({ message: 'Your account is inactive. Please contact the administrator.' });
     }
-    
-    
+
     console.log("Checking password...");
     const isPasswordValid = await bcrypt.compare(password, user.password);
     console.log("Password validation result:", isPasswordValid);
-    
+
     if (!isPasswordValid) {
       return res.status(401).json({ message: 'Invalid email or password.' });
     }
-    
-    
+
     const permissionsQuery = `
       SELECT p.code
       FROM permissions p
       JOIN role_permissions rp ON p.id = rp.permission_id
       WHERE rp.role_id = $1
     `;
-    
+
     const permissionsResult = await db.query(permissionsQuery, [user.role_id]);
     const permissions = permissionsResult.rows.map(row => row.code);
-    
-    
+
     const token = jwt.sign(
-      { userId: user.id }, 
-      process.env.JWT_SECRET, 
+      { userId: user.id },
+      process.env.JWT_SECRET,
       { expiresIn: process.env.JWT_EXPIRES_IN }
     );
-    
-    
+
     await db.query(
-      'UPDATE users SET last_login = CURRENT_TIMESTAMP WHERE id = $1', 
+      'UPDATE users SET last_login = CURRENT_TIMESTAMP WHERE id = $1',
       [user.id]
     );
-    
-    
+
     return res.json({
       token,
       user: {
@@ -97,10 +90,9 @@ exports.login = async (req, res) => {
   }
 };
 
-
 exports.getCurrentUser = async (req, res) => {
   try {
-    
+
     return res.json({ user: req.user });
   } catch (error) {
     console.error('Get current user error:', error);
@@ -108,9 +100,8 @@ exports.getCurrentUser = async (req, res) => {
   }
 };
 
-
 exports.changePassword = async (req, res) => {
-  
+
   const errors = validationResult(req);
   if (!errors.isEmpty()) {
     return res.status(400).json({ errors: errors.array() });
@@ -120,32 +111,29 @@ exports.changePassword = async (req, res) => {
   const userId = req.user.id;
 
   try {
-    
+
     const result = await db.query('SELECT password FROM users WHERE id = $1', [userId]);
-    
+
     if (result.rows.length === 0) {
       return res.status(404).json({ message: 'User not found.' });
     }
-    
+
     const currentHashedPassword = result.rows[0].password;
-    
-    
+
     const isCurrentPasswordValid = await bcrypt.compare(currentPassword, currentHashedPassword);
-    
+
     if (!isCurrentPasswordValid) {
       return res.status(400).json({ message: 'Current password is incorrect.' });
     }
-    
-    
+
     const salt = await bcrypt.genSalt(10);
     const hashedNewPassword = await bcrypt.hash(newPassword, salt);
-    
-    
+
     await db.query(
       'UPDATE users SET password = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2',
       [hashedNewPassword, userId]
     );
-    
+
     return res.json({ message: 'Your password has been successfully changed.' });
   } catch (error) {
     console.error('Change password error:', error);
@@ -153,9 +141,8 @@ exports.changePassword = async (req, res) => {
   }
 };
 
-
 exports.forgotPassword = async (req, res) => {
-  
+
   const errors = validationResult(req);
   if (!errors.isEmpty()) {
     return res.status(400).json({ errors: errors.array() });
@@ -164,42 +151,37 @@ exports.forgotPassword = async (req, res) => {
   const { email } = req.body;
 
   try {
-    
+
     const userResult = await db.query('SELECT id, email, first_name FROM users WHERE email = $1', [email]);
-    
+
     if (userResult.rows.length === 0) {
-      
+
       return res.json({ message: 'If your email exists in our system, a password reset link has been sent to your email address.' });
     }
-    
+
     const user = userResult.rows[0];
-    
-    
+
     const resetToken = jwt.sign(
-      { userId: user.id }, 
-      process.env.JWT_SECRET, 
+      { userId: user.id },
+      process.env.JWT_SECRET,
       { expiresIn: '1h' }
     );
-    
-    
+
     await db.query(
       'UPDATE users SET reset_token = $1, reset_token_expires = NOW() + INTERVAL \'1 hour\' WHERE id = $2',
       [resetToken, user.id]
     );
-    
-    
+
     const resetUrl = `${process.env.FRONTEND_URL || 'http://localhost:3000'}/reset-password/${resetToken}`;
-    
+
     console.log('RESET URL:', resetUrl);
     console.log('Email would be sent to:', user.email);
-    
-    
-    
-    
-    
-    return res.json({ 
+
+
+
+    return res.json({
       message: 'If your email exists in our system, a password reset link has been sent to your email address.',
-      
+
       ...(process.env.NODE_ENV === 'development' && { resetUrl })
     });
   } catch (error) {
@@ -208,9 +190,8 @@ exports.forgotPassword = async (req, res) => {
   }
 };
 
-
 exports.resetPassword = async (req, res) => {
-  
+
   const errors = validationResult(req);
   if (!errors.isEmpty()) {
     return res.status(400).json({ errors: errors.array() });
@@ -219,36 +200,33 @@ exports.resetPassword = async (req, res) => {
   const { token, newPassword } = req.body;
 
   try {
-    
+
     let decoded;
     try {
       decoded = jwt.verify(token, process.env.JWT_SECRET);
     } catch (err) {
       return res.status(400).json({ message: 'Invalid or expired token.' });
     }
-    
-    
+
     const userResult = await db.query(
       'SELECT id FROM users WHERE id = $1 AND reset_token = $2 AND reset_token_expires > NOW()',
       [decoded.userId, token]
     );
-    
+
     if (userResult.rows.length === 0) {
       return res.status(400).json({ message: 'Invalid or expired token.' });
     }
-    
+
     const userId = userResult.rows[0].id;
-    
-    
+
     const salt = await bcrypt.genSalt(10);
     const hashedPassword = await bcrypt.hash(newPassword, salt);
-    
-    
+
     await db.query(
       'UPDATE users SET password = $1, reset_token = NULL, reset_token_expires = NULL, updated_at = CURRENT_TIMESTAMP WHERE id = $2',
       [hashedPassword, userId]
     );
-    
+
     return res.json({ message: 'Your password has been successfully changed. Please login with your new password.' });
   } catch (error) {
     console.error('Reset password error:', error);

@@ -49,8 +49,7 @@ import { hasPermission } from '../utils/roles';
 import { PERMISSIONS } from '../utils/roles';
 import GridViewIcon from '@mui/icons-material/GridView';
 import TableViewIcon from '@mui/icons-material/TableView';
-import api from '../services/api';
-
+import api, { apiServices } from '../services/api';
 
 const mockSuppliers = [
   {
@@ -128,9 +127,10 @@ const Suppliers = () => {
   const [suppliers, setSuppliers] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
-  
+  const [totalCount, setTotalCount] = useState(0);
+
   const [openDialog, setOpenDialog] = useState(false);
-  const [dialogAction, setDialogAction] = useState('add'); 
+  const [dialogAction, setDialogAction] = useState('add');
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [currentSupplier, setCurrentSupplier] = useState({
     name: '',
@@ -148,56 +148,55 @@ const Suppliers = () => {
     payment_terms: '',
     is_active: true
   });
-  
-  
+
   const { user } = useSelector(state => state.auth);
   const canManageSuppliers = hasPermission(user?.role?.code, PERMISSIONS.MANAGE_SUPPLIERS);
-  
+
   useEffect(() => {
     fetchSuppliers();
-  }, []);
-  
+  }, [page, rowsPerPage, searchTerm]);
+
   const fetchSuppliers = async () => {
     setLoading(true);
     setError(null);
     try {
-      
-      
-      
-      
-      
-      setTimeout(() => {
-        setSuppliers(mockSuppliers);
-        setLoading(false);
-      }, 800);
+      const params = {
+        limit: rowsPerPage,
+        offset: page * rowsPerPage,
+        search: searchTerm || undefined
+      };
+
+      const response = await apiServices.suppliers.getAll(params);
+      setSuppliers(response.data.data || []);
+      setTotalCount(response.data.pagination?.total || 0);
+      setLoading(false);
     } catch (err) {
       console.error('Error fetching suppliers:', err);
       setError('Failed to load suppliers. Please try again.');
       setLoading(false);
     }
   };
-  
+
   const handleChangePage = (event, newPage) => {
     setPage(newPage);
   };
-  
+
   const handleChangeRowsPerPage = (event) => {
     setRowsPerPage(parseInt(event.target.value, 10));
     setPage(0);
   };
-  
+
   const handleSearchChange = (e) => {
     setSearchTerm(e.target.value);
     setPage(0);
   };
-  
+
   const handleViewModeChange = (event, newMode) => {
     if (newMode !== null) {
       setViewMode(newMode);
     }
   };
-  
-  
+
   const handleAddClick = () => {
     setDialogAction('add');
     setCurrentSupplier({
@@ -218,8 +217,7 @@ const Suppliers = () => {
     });
     setOpenDialog(true);
   };
-  
-  
+
   const handleEditClick = (supplier) => {
     setDialogAction('edit');
     setCurrentSupplier({
@@ -241,20 +239,17 @@ const Suppliers = () => {
     });
     setOpenDialog(true);
   };
-  
-  
+
   const handleDeleteClick = (supplier) => {
     setCurrentSupplier(supplier);
     setDeleteConfirmOpen(true);
   };
-  
-  
+
   const handleCloseDialog = () => {
     setOpenDialog(false);
     setDeleteConfirmOpen(false);
   };
-  
-  
+
   const handleInputChange = (e) => {
     const { name, value } = e.target;
     setCurrentSupplier(prev => ({
@@ -262,16 +257,14 @@ const Suppliers = () => {
       [name]: value
     }));
   };
-  
-  
+
   const handleSwitchChange = (e) => {
     setCurrentSupplier(prev => ({
       ...prev,
       is_active: e.target.checked
     }));
   };
-  
-  
+
   const validateForm = () => {
     if (!currentSupplier.name) {
       setError('Supplier name is required.');
@@ -279,90 +272,68 @@ const Suppliers = () => {
     }
     return true;
   };
-  
-  
+
   const handleSaveSupplier = async () => {
     if (!validateForm()) return;
-    
+
     setLoading(true);
     setError(null);
-    
+
     try {
       if (dialogAction === 'add') {
-        
-        
-        
-        
-        
-        const newSupplier = {
-          ...currentSupplier,
-          id: Math.max(...suppliers.map(s => s.id), 0) + 1,
-          created_at: new Date().toISOString(),
-          order_count: 0,
-          total_ordered: 0
-        };
-        
+
+        const response = await apiServices.suppliers.create(currentSupplier);
+
+        const newSupplier = response.data;
         setSuppliers([...suppliers, newSupplier]);
+
       } else {
-        
-        
-        
-        
-        
-        const updatedSupplier = { ...currentSupplier };
-        setSuppliers(suppliers.map(s => 
+
+        const { id, ...supplierData } = currentSupplier;
+        const response = await apiServices.suppliers.update(id, supplierData);
+
+        const updatedSupplier = response.data;
+        setSuppliers(suppliers.map(s =>
           s.id === currentSupplier.id ? updatedSupplier : s
         ));
       }
-      
+
       setOpenDialog(false);
-      setLoading(false);
+
+      fetchSuppliers();
     } catch (err) {
       console.error('Error saving supplier:', err);
-      setError('Failed to save supplier. Please try again.');
+      setError('Failed to save supplier: ' + (err.response?.data?.message || 'Please try again.'));
+    } finally {
       setLoading(false);
     }
   };
-  
-  
+
   const handleDeleteSupplier = async () => {
     setLoading(true);
     setError(null);
-    
+
     try {
-      
-      
-      
-      
+
+      await apiServices.suppliers.delete(currentSupplier.id);
+
       setSuppliers(suppliers.filter(s => s.id !== currentSupplier.id));
-      
+
       setDeleteConfirmOpen(false);
-      setLoading(false);
+
+      fetchSuppliers();
     } catch (err) {
       console.error('Error deleting supplier:', err);
-      setError('Failed to delete supplier. Please try again.');
+      setError('Failed to delete supplier: ' + (err.response?.data?.message || 'Please try again.'));
+    } finally {
       setLoading(false);
     }
   };
-  
-  
-  const filteredSuppliers = suppliers.filter(supplier => {
-    const search = searchTerm.toLowerCase();
-    return (
-      supplier.name.toLowerCase().includes(search) ||
-      (supplier.contact_name && supplier.contact_name.toLowerCase().includes(search)) ||
-      (supplier.email && supplier.email.toLowerCase().includes(search)) ||
-      (supplier.phone && supplier.phone.toLowerCase().includes(search))
-    );
-  });
-  
-  
-  const paginatedSuppliers = filteredSuppliers.slice(
-    page * rowsPerPage,
-    page * rowsPerPage + rowsPerPage
-  );
-  
-  
+
+  const filteredSuppliers = suppliers;
+
+  const paginatedSuppliers = filteredSuppliers;
+
   const renderTableView = () => (
     <TableContainer component={Paper}>
       <Table>
@@ -407,7 +378,7 @@ const Suppliers = () => {
                 </Box>
               </TableCell>
               <TableCell>
-                <Chip 
+                <Chip
                   label={supplier.is_active ? "Active" : "Inactive"}
                   color={supplier.is_active ? "success" : "default"}
                   size="small"
@@ -447,7 +418,7 @@ const Suppliers = () => {
       <TablePagination
         rowsPerPageOptions={[5, 10, 25, 50]}
         component="div"
-        count={filteredSuppliers.length}
+        count={totalCount}
         rowsPerPage={rowsPerPage}
         page={page}
         onPageChange={handleChangePage}
@@ -455,25 +426,24 @@ const Suppliers = () => {
       />
     </TableContainer>
   );
-  
-  
+
   const renderCardView = () => (
     <Grid container spacing={2}>
       {paginatedSuppliers.map((supplier) => (
         <Grid item xs={12} sm={6} md={4} key={supplier.id}>
-          <Card 
-            sx={{ 
-              height: '100%', 
-              display: 'flex', 
+          <Card
+            sx={{
+              height: '100%',
+              display: 'flex',
               flexDirection: 'column',
-              '&:hover': { boxShadow: 6 } 
+              '&:hover': { boxShadow: 6 }
             }}
           >
             <CardContent sx={{ flexGrow: 1 }}>
               <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 2 }}>
                 <Typography variant="h6" component="div">
                   {supplier.name}
-                  <Chip 
+                  <Chip
                     label={supplier.is_active ? "Active" : "Inactive"}
                     color={supplier.is_active ? "success" : "default"}
                     size="small"
@@ -499,13 +469,13 @@ const Suppliers = () => {
                   </Box>
                 )}
               </Box>
-              
+
               {supplier.contact_name && (
                 <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
                   Contact: {supplier.contact_name}
                 </Typography>
               )}
-              
+
               <Box sx={{ mb: 2 }}>
                 {supplier.email && (
                   <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
@@ -532,9 +502,9 @@ const Suppliers = () => {
                   </Box>
                 )}
               </Box>
-              
+
               <Divider sx={{ my: 1 }} />
-              
+
               <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 2 }}>
                 <Chip
                   label={`${supplier.order_count} Orders`}
@@ -550,12 +520,12 @@ const Suppliers = () => {
           </Card>
         </Grid>
       ))}
-      
+
       <Box sx={{ width: '100%', display: 'flex', justifyContent: 'center', mt: 2 }}>
         <TablePagination
           rowsPerPageOptions={[6, 12, 24, 48]}
           component="div"
-          count={filteredSuppliers.length}
+          count={totalCount}
           rowsPerPage={rowsPerPage}
           page={page}
           onPageChange={handleChangePage}
@@ -564,7 +534,7 @@ const Suppliers = () => {
       </Box>
     </Grid>
   );
-  
+
   return (
     <Box>
       <Box sx={{ mb: 4 }}>
@@ -575,7 +545,7 @@ const Suppliers = () => {
           Manage your suppliers, view order history, and contact information.
         </Typography>
       </Box>
-      
+
       <Paper sx={{ mb: 3, p: 2 }}>
         <Grid container spacing={2} alignItems="center">
           <Grid item xs={12} sm={6} md={4}>
@@ -617,19 +587,19 @@ const Suppliers = () => {
           </Grid>
         </Grid>
       </Paper>
-      
+
       {loading && (
         <Box sx={{ display: 'flex', justifyContent: 'center', mb: 3 }}>
           <CircularProgress />
         </Box>
       )}
-      
+
       {error && (
         <Alert severity="error" sx={{ mb: 3 }}>
           {error}
         </Alert>
       )}
-      
+
       {!loading && filteredSuppliers.length === 0 ? (
         <Paper sx={{ p: 3, textAlign: 'center' }}>
           <Typography variant="h6" color="text.secondary">
@@ -642,8 +612,7 @@ const Suppliers = () => {
       ) : (
         !loading && viewMode === 'table' ? renderTableView() : renderCardView()
       )}
-      
-      
+
       <Dialog open={openDialog} onClose={handleCloseDialog} maxWidth="md" fullWidth>
         <DialogTitle>
           {dialogAction === 'add' ? 'Add New Supplier' : 'Edit Supplier'}
@@ -792,9 +761,9 @@ const Suppliers = () => {
         </DialogContent>
         <DialogActions>
           <Button onClick={handleCloseDialog}>Cancel</Button>
-          <Button 
-            onClick={handleSaveSupplier} 
-            variant="contained" 
+          <Button
+            onClick={handleSaveSupplier}
+            variant="contained"
             color="primary"
             disabled={loading}
           >
@@ -802,21 +771,20 @@ const Suppliers = () => {
           </Button>
         </DialogActions>
       </Dialog>
-      
-      
+
       <Dialog open={deleteConfirmOpen} onClose={handleCloseDialog}>
         <DialogTitle>Delete Supplier</DialogTitle>
         <DialogContent>
           <DialogContentText>
-            Are you sure you want to delete {currentSupplier.name}? 
+            Are you sure you want to delete {currentSupplier.name}?
             This action cannot be undone.
           </DialogContentText>
         </DialogContent>
         <DialogActions>
           <Button onClick={handleCloseDialog}>Cancel</Button>
-          <Button 
-            onClick={handleDeleteSupplier} 
-            variant="contained" 
+          <Button
+            onClick={handleDeleteSupplier}
+            variant="contained"
             color="error"
             disabled={loading}
           >

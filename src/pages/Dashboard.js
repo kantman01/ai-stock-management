@@ -1,11 +1,11 @@
 import React from 'react';
-import { 
-  Box, 
-  Grid, 
-  Paper, 
-  Typography, 
-  Card, 
-  CardContent, 
+import {
+  Box,
+  Grid,
+  Paper,
+  Typography,
+  Card,
+  CardContent,
   CardHeader,
   Divider,
   List,
@@ -14,16 +14,15 @@ import {
   ListItemAvatar,
   Avatar
 } from '@mui/material';
-import { 
-  TrendingUp, 
-  TrendingDown, 
+import {
+  TrendingUp,
+  TrendingDown,
   WarningAmber,
   Inventory,
   ShoppingCart,
   LocalShipping,
   AttachMoney
 } from '@mui/icons-material';
-
 
 const SimpleChart = () => {
   return (
@@ -37,7 +36,7 @@ const SimpleChart = () => {
         p: 2,
       }}
     >
-      
+
       {[70, 45, 85, 65, 90, 80, 75].map((height, index) => (
         <Box
           key={index}
@@ -55,7 +54,7 @@ const SimpleChart = () => {
 };
 
 const Dashboard = () => {
-  
+
   const stats = {
     totalProducts: 234,
     lowStockItems: 12,
@@ -63,7 +62,7 @@ const Dashboard = () => {
     revenue: 12580,
     pendingDeliveries: 5
   };
-  
+
   const recentActivities = [
     { id: 1, action: 'New product added', product: 'Samsung Galaxy S21', time: '2 minutes ago', type: 'add' },
     { id: 2, action: 'Stock updated', product: 'Apple iPhone 14', time: '15 minutes ago', type: 'update' },
@@ -71,7 +70,7 @@ const Dashboard = () => {
     { id: 4, action: 'Stock low!', product: 'Sony PlayStation 5', time: '1 hour ago', type: 'warning' },
     { id: 5, action: 'Delivery completed', product: 'Order #12341', time: '2 hours ago', type: 'delivery' },
   ];
-  
+
   const getActivityIcon = (type) => {
     switch (type) {
       case 'add':
@@ -88,21 +87,20 @@ const Dashboard = () => {
         return <Avatar><Inventory /></Avatar>;
     }
   };
-  
+
   return (
     <Box sx={{ pt: 1 }}>
       <Typography variant="h4" component="h1" gutterBottom>
         Dashboard
       </Typography>
-      
-      
+
       <Grid container spacing={3} sx={{ mb: 3 }}>
         <Grid item xs={12} sm={6} md={3}>
-          <Paper 
+          <Paper
             elevation={0}
-            sx={{ 
-              p: 2, 
-              display: 'flex', 
+            sx={{
+              p: 2,
+              display: 'flex',
               flexDirection: 'column',
               borderRadius: 2,
               boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
@@ -122,13 +120,13 @@ const Dashboard = () => {
             </Box>
           </Paper>
         </Grid>
-        
+
         <Grid item xs={12} sm={6} md={3}>
-          <Paper 
+          <Paper
             elevation={0}
-            sx={{ 
-              p: 2, 
-              display: 'flex', 
+            sx={{
+              p: 2,
+              display: 'flex',
               flexDirection: 'column',
               borderRadius: 2,
               boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
@@ -148,13 +146,13 @@ const Dashboard = () => {
             </Box>
           </Paper>
         </Grid>
-        
+
         <Grid item xs={12} sm={6} md={3}>
-          <Paper 
+          <Paper
             elevation={0}
-            sx={{ 
-              p: 2, 
-              display: 'flex', 
+            sx={{
+              p: 2,
+              display: 'flex',
               flexDirection: 'column',
               borderRadius: 2,
               boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
@@ -174,13 +172,13 @@ const Dashboard = () => {
             </Box>
           </Paper>
         </Grid>
-        
+
         <Grid item xs={12} sm={6} md={3}>
-          <Paper 
+          <Paper
             elevation={0}
-            sx={{ 
-              p: 2, 
-              display: 'flex', 
+            sx={{
+              p: 2,
+              display: 'flex',
               flexDirection: 'column',
               borderRadius: 2,
               boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
@@ -201,14 +199,13 @@ const Dashboard = () => {
           </Paper>
         </Grid>
       </Grid>
-      
-      
+
       <Grid container spacing={3}>
-        
+
         <Grid item xs={12} md={8}>
           <Card sx={{ borderRadius: 2, boxShadow: '0 2px 8px rgba(0,0,0,0.1)' }}>
-            <CardHeader 
-              title="Sales Statistics" 
+            <CardHeader
+              title="Sales Statistics"
               subheader="Sales data for the last 7 days"
             />
             <Divider />
@@ -217,12 +214,11 @@ const Dashboard = () => {
             </CardContent>
           </Card>
         </Grid>
-        
-        
+
         <Grid item xs={12} md={4}>
           <Card sx={{ borderRadius: 2, boxShadow: '0 2px 8px rgba(0,0,0,0.1)' }}>
-            <CardHeader 
-              title="Recent Activities" 
+            <CardHeader
+              title="Recent Activities"
               subheader="Latest changes in the system"
             />
             <Divider />
@@ -256,12 +252,11 @@ const Dashboard = () => {
             </List>
           </Card>
         </Grid>
-        
-        
+
         <Grid item xs={12} md={6}>
           <Card sx={{ borderRadius: 2, boxShadow: '0 2px 8px rgba(0,0,0,0.1)' }}>
-            <CardHeader 
-              title="Stock Predictions (AI)" 
+            <CardHeader
+              title="Stock Predictions (AI)"
               subheader="AI-powered stock forecasting"
             />
             <Divider />
@@ -277,12 +272,11 @@ const Dashboard = () => {
             </CardContent>
           </Card>
         </Grid>
-        
-        
+
         <Grid item xs={12} md={6}>
           <Card sx={{ borderRadius: 2, boxShadow: '0 2px 8px rgba(0,0,0,0.1)' }}>
-            <CardHeader 
-              title="Pending Deliveries" 
+            <CardHeader
+              title="Pending Deliveries"
               subheader={`${stats.pendingDeliveries} deliveries pending`}
             />
             <Divider />

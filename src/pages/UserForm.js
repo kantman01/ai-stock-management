@@ -23,10 +23,8 @@ import { hasPermission } from '../utils/roles';
 import { PERMISSIONS } from '../utils/roles';
 import api from '../services/api';
 
-
 const ROLE_OPTIONS = [
 ];
-
 
 const mockUsers = [
 ];
@@ -35,10 +33,10 @@ const UserForm = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   const isEditMode = !!id;
-  
+
   const { user } = useSelector(state => state.auth);
   const canManageUsers = hasPermission(user?.role, PERMISSIONS.MANAGE_USERS);
-  
+
   const [formData, setFormData] = useState({
     name: '',
     username: '',
@@ -48,32 +46,29 @@ const UserForm = () => {
     role: 'customer',
     isActive: true
   });
-  
+
   const [loading, setLoading] = useState(isEditMode);
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
   const [validation, setValidation] = useState({});
-  
+
   useEffect(() => {
-    
+
     if (!canManageUsers) {
       navigate('/dashboard');
       return;
     }
-    
-    
+
     if (isEditMode) {
       const fetchUser = async () => {
         setLoading(true);
         try {
-          
-          
-          
-          
-          
-          await new Promise(resolve => setTimeout(resolve, 600)); 
+
+
+
+          await new Promise(resolve => setTimeout(resolve, 600));
           const userData = mockUsers.find(u => u.id === parseInt(id));
-          
+
           if (userData) {
             setFormData({
               name: userData.name,
@@ -94,39 +89,39 @@ const UserForm = () => {
           setLoading(false);
         }
       };
-      
+
       fetchUser();
     }
   }, [id, isEditMode, canManageUsers, navigate]);
-  
+
   const validateForm = () => {
     const errors = {};
-    
+
     if (!formData.name) errors.name = 'Ad Soyad gereklidir';
     if (!formData.username) errors.username = 'Kullanıcı adı gereklidir';
-    
+
     if (!formData.email) {
       errors.email = 'E-posta gereklidir';
     } else if (!/\S+@\S+\.\S+/.test(formData.email)) {
       errors.email = 'Geçerli bir e-posta adresi giriniz';
     }
-    
+
     if (!isEditMode && !formData.password) {
       errors.password = 'Şifre gereklidir';
     } else if (formData.password && formData.password.length < 6) {
       errors.password = 'Şifre en az 6 karakter olmalıdır';
     }
-    
+
     if (!isEditMode && formData.password !== formData.confirmPassword) {
       errors.confirmPassword = 'Şifreler eşleşmiyor';
     }
-    
+
     if (!formData.role) errors.role = 'Rol seçimi gereklidir';
-    
+
     setValidation(errors);
     return Object.keys(errors).length === 0;
   };
-  
+
   const handleInputChange = (e) => {
     const { name, value, checked } = e.target;
     setFormData({
@@ -134,53 +129,40 @@ const UserForm = () => {
       [name]: name === 'isActive' ? checked : value
     });
   };
-  
+
   const handleSubmit = async (e) => {
     e.preventDefault();
-    
+
     if (!validateForm()) {
       return;
     }
-    
+
     setLoading(true);
     setError(null);
     setSuccess(null);
-    
+
     try {
       if (isEditMode) {
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        await new Promise(resolve => setTimeout(resolve, 800)); 
-        
+
+
+
+
+
+
+        await new Promise(resolve => setTimeout(resolve, 800));
+
         setSuccess('Kullanıcı başarıyla güncellendi.');
       } else {
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        await new Promise(resolve => setTimeout(resolve, 800)); 
-        
+
+
+
+
+
+
+        await new Promise(resolve => setTimeout(resolve, 800));
+
         setSuccess('Kullanıcı başarıyla oluşturuldu.');
-        
-        
+
         if (!isEditMode) {
           setFormData({
             name: '',
@@ -195,18 +177,18 @@ const UserForm = () => {
       }
     } catch (error) {
       console.error('Error saving user:', error);
-      setError(isEditMode 
-        ? 'Kullanıcı güncellenirken bir hata oluştu.' 
+      setError(isEditMode
+        ? 'Kullanıcı güncellenirken bir hata oluştu.'
         : 'Kullanıcı oluşturulurken bir hata oluştu.');
     } finally {
       setLoading(false);
     }
   };
-  
+
   const handleCancel = () => {
     navigate('/users');
   };
-  
+
   return (
     <Box sx={{ p: 3 }}>
       <Breadcrumbs sx={{ mb: 3 }}>
@@ -220,12 +202,12 @@ const UserForm = () => {
           {isEditMode ? 'Kullanıcı Düzenle' : 'Yeni Kullanıcı'}
         </Typography>
       </Breadcrumbs>
-      
+
       <Paper sx={{ p: 3 }}>
         <Typography variant="h5" component="h1" fontWeight="bold" sx={{ mb: 3 }}>
           {isEditMode ? 'Kullanıcı Düzenle' : 'Yeni Kullanıcı'}
         </Typography>
-        
+
         {loading && !formData.name ? (
           <Box sx={{ display: 'flex', justifyContent: 'center', p: 4 }}>
             <CircularProgress />
@@ -235,7 +217,7 @@ const UserForm = () => {
         ) : success ? (
           <Alert severity="success" sx={{ mb: 3 }}>{success}</Alert>
         ) : null}
-        
+
         <form onSubmit={handleSubmit}>
           <Grid container spacing={3}>
             <Grid item xs={12} md={6}>
@@ -297,14 +279,14 @@ const UserForm = () => {
                 </Select>
               </FormControl>
             </Grid>
-            
+
             <Grid item xs={12}>
               <Divider sx={{ my: 1 }} />
               <Typography variant="subtitle1" sx={{ mb: 2 }}>
                 {isEditMode ? 'Şifre Değiştir (opsiyonel)' : 'Şifre'}
               </Typography>
             </Grid>
-            
+
             <Grid item xs={12} md={6}>
               <TextField
                 name="password"
@@ -333,7 +315,7 @@ const UserForm = () => {
                 disabled={loading}
               />
             </Grid>
-            
+
             <Grid item xs={12}>
               <Divider sx={{ my: 1 }} />
               <FormControlLabel
@@ -348,7 +330,7 @@ const UserForm = () => {
                 label="Aktif"
               />
             </Grid>
-            
+
             <Grid item xs={12}>
               <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 2, mt: 2 }}>
                 <Button

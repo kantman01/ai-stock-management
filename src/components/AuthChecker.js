@@ -13,33 +13,32 @@ const AuthChecker = ({ children }) => {
   const dispatch = useDispatch();
   const location = useLocation();
   const isLoading = useSelector(selectIsLoading);
-  
-  
+
   const publicRoutes = ['/login', '/register', '/unauthorized'];
   const isPublicRoute = publicRoutes.includes(location.pathname);
-  
+
   useEffect(() => {
     const token = localStorage.getItem('token');
     if (token) {
       dispatch(getCurrentUser());
     }
   }, [dispatch]);
-  
+
   if (isLoading && !isPublicRoute) {
     return (
-      <Box 
-        sx={{ 
-          display: 'flex', 
-          justifyContent: 'center', 
-          alignItems: 'center', 
-          height: '100vh' 
+      <Box
+        sx={{
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+          height: '100vh'
         }}
       >
         <CircularProgress />
       </Box>
     );
   }
-  
+
   return children;
 };
 

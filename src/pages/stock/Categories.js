@@ -20,7 +20,11 @@ import {
   Chip,
   CircularProgress,
   Alert,
-  Snackbar
+  Snackbar,
+  FormControl,
+  InputLabel,
+  Select,
+  MenuItem
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -35,21 +39,18 @@ import api from '../../services/api';
 const Categories = () => {
   const { user } = useSelector(state => state.auth);
   const canManageCategories = hasPermission(user?.role, PERMISSIONS.MANAGE_CATEGORIES);
-  
   const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  
-  
+
   const [openAddDialog, setOpenAddDialog] = useState(false);
   const [openEditDialog, setOpenEditDialog] = useState(false);
   const [openDeleteDialog, setOpenDeleteDialog] = useState(false);
   const [currentCategory, setCurrentCategory] = useState(null);
-  const [formData, setFormData] = useState({ name: '', description: '' });
-  
-  
+  const [formData, setFormData] = useState({ name: '', description: '', parent_id: '' });
+
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
-  
+
   useEffect(() => {
     fetchCategories();
   }, []);
@@ -57,7 +58,7 @@ const Categories = () => {
   const fetchCategories = async () => {
     setLoading(true);
     try {
-      const response = await api.get('/categories');
+      const response = await api.get('/categories?include_product_count=true');
       setCategories(response.data || []);
       setError(null);
     } catch (error) {
@@ -67,33 +68,34 @@ const Categories = () => {
       setLoading(false);
     }
   };
-  
+
   const handleAddClick = () => {
-    setFormData({ name: '', description: '' });
+    setFormData({ name: '', description: '', parent_id: '' });
     setOpenAddDialog(true);
   };
-  
+
   const handleEditClick = (category) => {
     setCurrentCategory(category);
     setFormData({
       name: category.name,
-      description: category.description
+      description: category.description,
+      parent_id: category.parent_id || ''
     });
     setOpenEditDialog(true);
   };
-  
+
   const handleDeleteClick = (category) => {
     setCurrentCategory(category);
     setOpenDeleteDialog(true);
   };
-  
+
   const handleCloseDialog = () => {
     setOpenAddDialog(false);
     setOpenEditDialog(false);
     setOpenDeleteDialog(false);
     setCurrentCategory(null);
   };
-  
+
   const handleInputChange = (e) => {
     const { name, value } = e.target;
     setFormData({
@@ -101,7 +103,7 @@ const Categories = () => {
       [name]: value
     });
   };
-  
+
   const handleAddCategory = async () => {
     if (!formData.name) {
       setSnackbar({
@@ -111,10 +113,12 @@ const Categories = () => {
       });
       return;
     }
-    
+
     try {
-      const response = await api.categories.create(formData);
-      setCategories([...categories, response.data.category]);
+      const response = await api.post('/categories', formData);
+
+      fetchCategories();
+
       setSnackbar({
         open: true,
         message: 'Category added successfully.',
@@ -129,7 +133,7 @@ const Categories = () => {
       });
     }
   };
-  
+
   const handleUpdateCategory = async () => {
     if (!formData.name) {
       setSnackbar({
@@ -139,15 +143,12 @@ const Categories = () => {
       });
       return;
     }
-    
+
     try {
-      const response = await api.categories.update(currentCategory.id, formData);
-      
-      const updatedCategories = categories.map(category => 
-        category.id === currentCategory.id ? response.data.category : category
-      );
-      
-      setCategories(updatedCategories);
+      await api.put(`/categories/${currentCategory.id}`, formData);
+
+      fetchCategories();
+
       setSnackbar({
         open: true,
         message: 'Category updated successfully.',
@@ -162,16 +163,13 @@ const Categories = () => {
       });
     }
   };
-  
+
   const handleDeleteCategory = async () => {
     try {
-      await api.categories.delete(currentCategory.id);
-      
-      const filteredCategories = categories.filter(
-        category => category.id !== currentCategory.id
-      );
-      
-      setCategories(filteredCategories);
+      await api.delete(`/categories/${currentCategory.id}`);
+
+      fetchCategories();
+
       setSnackbar({
         open: true,
         message: 'Category deleted successfully.',
@@ -186,18 +184,18 @@ const Categories = () => {
       });
     }
   };
-  
+
   const handleCloseSnackbar = () => {
     setSnackbar({ ...snackbar, open: false });
   };
-  
+
   return (
     <Box sx={{ p: 3 }}>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
         <Typography variant="h5" component="h1" fontWeight="bold">
           Categories
         </Typography>
-        
+
         {canManageCategories && (
           <Button
             variant="contained"
@@ -209,7 +207,7 @@ const Categories = () => {
           </Button>
         )}
       </Box>
-      
+
       {loading ? (
         <Box sx={{ display: 'flex', justifyContent: 'center', p: 4 }}>
           <CircularProgress />
@@ -223,6 +221,8 @@ const Categories = () => {
               <TableRow>
                 <TableCell>Category Name</TableCell>
                 <TableCell>Description</TableCell>
+                <TableCell align="center">Products</TableCell>
+                <TableCell>Parent Category</TableCell>
                 {canManageCategories && <TableCell align="right">Actions</TableCell>}
               </TableRow>
             </TableHead>
@@ -233,6 +233,14 @@ const Categories = () => {
                     {category.name}
                   </TableCell>
                   <TableCell>{category.description}</TableCell>
+                  <TableCell align="center">
+                    <Chip
+                      label={category.product_count || 0}
+                      color={category.product_count > 0 ? "primary" : "default"}
+                      size="small"
+                    />
+                  </TableCell>
+                  <TableCell>{category.parent_name || '-'}</TableCell>
                   {canManageCategories && (
                     <TableCell align="right">
                       <IconButton
@@ -246,6 +254,7 @@ const Categories = () => {
                         color="error"
                         size="small"
                         onClick={() => handleDeleteClick(category)}
+                        disabled={category.product_count > 0}
                       >
                         <DeleteIcon />
                       </IconButton>
@@ -253,12 +262,18 @@ const Categories = () => {
                   )}
                 </TableRow>
               ))}
+              {categories.length === 0 && (
+                <TableRow>
+                  <TableCell colSpan={canManageCategories ? 5 : 4} align="center">
+                    No categories found.
+                  </TableCell>
+                </TableRow>
+              )}
             </TableBody>
           </Table>
         </TableContainer>
       )}
-      
-      
+
       <Dialog open={openAddDialog} onClose={handleCloseDialog}>
         <DialogTitle>New Category Add</DialogTitle>
         <DialogContent>
@@ -282,6 +297,29 @@ const Categories = () => {
             value={formData.description}
             onChange={handleInputChange}
           />
+          <FormControl fullWidth margin="dense">
+            <InputLabel id="parent-category-label">Parent Category</InputLabel>
+            <Select
+              labelId="parent-category-label"
+              id="parent-category"
+              name="parent_id"
+              value={formData.parent_id}
+              onChange={handleInputChange}
+              label="Parent Category"
+            >
+              <MenuItem value="">
+                <em>None</em>
+              </MenuItem>
+              {categories.map((category) => (
+                <MenuItem
+                  key={category.id}
+                  value={category.id}
+                >
+                  {category.name}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
         </DialogContent>
         <DialogActions>
           <Button onClick={handleCloseDialog}>Cancel</Button>
@@ -290,8 +328,7 @@ const Categories = () => {
           </Button>
         </DialogActions>
       </Dialog>
-      
-      
+
       <Dialog open={openEditDialog} onClose={handleCloseDialog}>
         <DialogTitle>Category Edit</DialogTitle>
         <DialogContent>
@@ -315,6 +352,32 @@ const Categories = () => {
             value={formData.description}
             onChange={handleInputChange}
           />
+          <FormControl fullWidth margin="dense">
+            <InputLabel id="parent-category-edit-label">Parent Category</InputLabel>
+            <Select
+              labelId="parent-category-edit-label"
+              id="parent-category-edit"
+              name="parent_id"
+              value={formData.parent_id}
+              onChange={handleInputChange}
+              label="Parent Category"
+            >
+              <MenuItem value="">
+                <em>None</em>
+              </MenuItem>
+              {categories
+                .filter(c => c.id !== currentCategory?.id)
+                .map((category) => (
+                  <MenuItem
+                    key={category.id}
+                    value={category.id}
+                  >
+                    {category.name}
+                  </MenuItem>
+                ))
+              }
+            </Select>
+          </FormControl>
         </DialogContent>
         <DialogActions>
           <Button onClick={handleCloseDialog}>Cancel</Button>
@@ -323,8 +386,7 @@ const Categories = () => {
           </Button>
         </DialogActions>
       </Dialog>
-      
-      
+
       <Dialog open={openDeleteDialog} onClose={handleCloseDialog}>
         <DialogTitle>Category Delete</DialogTitle>
         <DialogContent>
@@ -332,16 +394,24 @@ const Categories = () => {
             Are you sure you want to delete the category "{currentCategory?.name}"?
             This action cannot be undone.
           </DialogContentText>
+          {currentCategory?.product_count > 0 && (
+            <Alert severity="warning" sx={{ mt: 2 }}>
+              This category has {currentCategory.product_count} products. You cannot delete it until all products are moved or removed.
+            </Alert>
+          )}
         </DialogContent>
         <DialogActions>
           <Button onClick={handleCloseDialog}>Cancel</Button>
-          <Button onClick={handleDeleteCategory} color="error">
+          <Button
+            onClick={handleDeleteCategory}
+            color="error"
+            disabled={currentCategory?.product_count > 0}
+          >
             Delete
           </Button>
         </DialogActions>
       </Dialog>
-      
-      
+
       <Snackbar
         open={snackbar.open}
         autoHideDuration={6000}

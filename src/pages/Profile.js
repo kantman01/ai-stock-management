@@ -44,7 +44,7 @@ const Profile = () => {
   const [error, setError] = useState(null);
   const [avatarFile, setAvatarFile] = useState(null);
   const [avatarPreview, setAvatarPreview] = useState(null);
-  
+
   const [profileData, setProfileData] = useState({
     name: '',
     email: '',
@@ -53,13 +53,13 @@ const Profile = () => {
     department: '',
     bio: ''
   });
-  
+
   const [passwordData, setPasswordData] = useState({
     currentPassword: '',
     newPassword: '',
     confirmPassword: ''
   });
-  
+
   const [notificationPreferences, setNotificationPreferences] = useState({
     emailNotifications: true,
     browserNotifications: false,
@@ -68,8 +68,7 @@ const Profile = () => {
     securityAlerts: true,
     marketingEmails: false
   });
-  
-  
+
   const [loginHistory] = useState([
     { id: 1, date: '2023-05-15T10:30:00', ip: '192.168.1.1', device: 'Chrome / Windows', status: 'success' },
     { id: 2, date: '2023-05-14T08:45:00', ip: '192.168.1.1', device: 'Chrome / Windows', status: 'success' },
@@ -77,9 +76,9 @@ const Profile = () => {
     { id: 4, date: '2023-05-12T09:15:00', ip: '10.0.0.5', device: 'Firefox / MacOS', status: 'success' },
     { id: 5, date: '2023-05-10T16:50:00', ip: '8.8.8.8', device: 'Unknown', status: 'failed' }
   ]);
-  
+
   useEffect(() => {
-    
+
     if (user) {
       setProfileData({
         name: user.name || '',
@@ -91,11 +90,11 @@ const Profile = () => {
       });
     }
   }, [user]);
-  
+
   const handleTabChange = (event, newValue) => {
     setActiveTab(newValue);
   };
-  
+
   const handleProfileChange = (e) => {
     const { name, value } = e.target;
     setProfileData({
@@ -103,7 +102,7 @@ const Profile = () => {
       [name]: value
     });
   };
-  
+
   const handlePasswordChange = (e) => {
     const { name, value } = e.target;
     setPasswordData({
@@ -111,7 +110,7 @@ const Profile = () => {
       [name]: value
     });
   };
-  
+
   const handleNotificationChange = (e) => {
     const { name, checked } = e.target;
     setNotificationPreferences({
@@ -119,13 +118,12 @@ const Profile = () => {
       [name]: checked
     });
   };
-  
+
   const handleAvatarChange = (e) => {
     const file = e.target.files[0];
     if (file) {
       setAvatarFile(file);
-      
-      
+
       const reader = new FileReader();
       reader.onloadend = () => {
         setAvatarPreview(reader.result);
@@ -133,76 +131,69 @@ const Profile = () => {
       reader.readAsDataURL(file);
     }
   };
-  
+
   const handleSaveProfile = () => {
     setLoading(true);
     setError(null);
     setSuccess(false);
-    
-    
+
     setTimeout(() => {
       setLoading(false);
       setSuccess(true);
-      
-      
+
       setTimeout(() => {
         setSuccess(false);
       }, 3000);
     }, 1000);
   };
-  
+
   const handleSavePassword = () => {
-    
+
     if (passwordData.newPassword !== passwordData.confirmPassword) {
       setError('Yeni şifreler eşleşmiyor.');
       return;
     }
-    
+
     if (passwordData.newPassword.length < 6) {
       setError('Şifre en az 6 karakter olmalıdır.');
       return;
     }
-    
+
     setLoading(true);
     setError(null);
     setSuccess(false);
-    
-    
+
     setTimeout(() => {
       setLoading(false);
       setSuccess(true);
-      
-      
+
       setPasswordData({
         currentPassword: '',
         newPassword: '',
         confirmPassword: ''
       });
-      
-      
+
       setTimeout(() => {
         setSuccess(false);
       }, 3000);
     }, 1000);
   };
-  
+
   const handleSaveNotifications = () => {
     setLoading(true);
     setError(null);
     setSuccess(false);
-    
-    
+
     setTimeout(() => {
       setLoading(false);
       setSuccess(true);
-      
-      
+
       setTimeout(() => {
         setSuccess(false);
       }, 3000);
     }, 1000);
   };
-  
+
   return (
     <Box sx={{ p: 3 }}>
       <Paper sx={{ p: 3, mb: 3 }}>
@@ -240,21 +231,21 @@ const Profile = () => {
               {profileData.email || 'email@example.com'}
             </Typography>
             <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
-              {profileData.position && profileData.department 
+              {profileData.position && profileData.department
                 ? `${profileData.position}, ${profileData.department}`
                 : 'Position, Department'}
             </Typography>
             <Box sx={{ mt: 1 }}>
-              <Chip 
-                label={user?.role?.code ? user.role.code.charAt(0).toUpperCase() + user.role.code.slice(1) : 'User'} 
-                color="primary" 
-                size="small" 
+              <Chip
+                label={user?.role?.code ? user.role.code.charAt(0).toUpperCase() + user.role.code.slice(1) : 'User'}
+                color="primary"
+                size="small"
               />
             </Box>
           </Grid>
         </Grid>
       </Paper>
-      
+
       <Paper sx={{ mb: 3 }}>
         <Tabs
           value={activeTab}
@@ -269,27 +260,26 @@ const Profile = () => {
           <Tab label="Login History" icon={<HistoryIcon />} iconPosition="start" />
         </Tabs>
       </Paper>
-      
+
       {error && (
         <Alert severity="error" sx={{ mb: 3 }}>
           {error}
         </Alert>
       )}
-      
+
       {success && (
         <Alert severity="success" sx={{ mb: 3 }} icon={<CheckIcon />}>
           Your information has been updated successfully.
         </Alert>
       )}
-      
-      
+
       {activeTab === 0 && (
         <Paper sx={{ p: 3 }}>
           <Typography variant="h6" gutterBottom>
             Personal Information
           </Typography>
           <Divider sx={{ mb: 3 }} />
-          
+
           <Grid container spacing={3}>
             <Grid item xs={12} md={6}>
               <TextField
@@ -349,7 +339,7 @@ const Profile = () => {
               />
             </Grid>
           </Grid>
-          
+
           <Box sx={{ mt: 3, display: 'flex', justifyContent: 'flex-end' }}>
             <Button
               variant="contained"
@@ -363,15 +353,14 @@ const Profile = () => {
           </Box>
         </Paper>
       )}
-      
-      
+
       {activeTab === 1 && (
         <Paper sx={{ p: 3 }}>
           <Typography variant="h6" gutterBottom>
             Change Password
           </Typography>
           <Divider sx={{ mb: 3 }} />
-          
+
           <Grid container spacing={3}>
             <Grid item xs={12}>
               <TextField
@@ -410,7 +399,7 @@ const Profile = () => {
               />
             </Grid>
           </Grid>
-          
+
           <Box sx={{ mt: 3, display: 'flex', justifyContent: 'flex-end' }}>
             <Button
               variant="contained"
@@ -424,15 +413,14 @@ const Profile = () => {
           </Box>
         </Paper>
       )}
-      
-      
+
       {activeTab === 2 && (
         <Paper sx={{ p: 3 }}>
           <Typography variant="h6" gutterBottom>
             Notification Preferences
           </Typography>
           <Divider sx={{ mb: 3 }} />
-          
+
           <Grid container spacing={2}>
             <Grid item xs={12}>
               <FormControlLabel
@@ -512,7 +500,7 @@ const Profile = () => {
               />
             </Grid>
           </Grid>
-          
+
           <Box sx={{ mt: 3, display: 'flex', justifyContent: 'flex-end' }}>
             <Button
               variant="contained"
@@ -526,15 +514,14 @@ const Profile = () => {
           </Box>
         </Paper>
       )}
-      
-      
+
       {activeTab === 3 && (
         <Paper sx={{ p: 3 }}>
           <Typography variant="h6" gutterBottom>
             Login History
           </Typography>
           <Divider sx={{ mb: 3 }} />
-          
+
           <List>
             {loginHistory.map((login) => (
               <ListItem key={login.id} disablePadding sx={{ mb: 2 }}>
@@ -557,9 +544,9 @@ const Profile = () => {
                               <Typography variant="body1">
                                 {new Date(login.date).toLocaleString('en-US')}
                               </Typography>
-                              <Chip 
-                                label={login.status === 'success' ? 'Success' : 'Failed'} 
-                                color={login.status === 'success' ? 'success' : 'error'} 
+                              <Chip
+                                label={login.status === 'success' ? 'Success' : 'Failed'}
+                                color={login.status === 'success' ? 'success' : 'error'}
                                 size="small"
                                 sx={{ ml: 1 }}
                               />

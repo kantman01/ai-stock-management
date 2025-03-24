@@ -41,7 +41,6 @@ import { PERMISSIONS } from '../utils/roles';
 import { useNavigate } from 'react-router-dom';
 import api from '../services/api';
 
-
 const ROLE_LABELS = {
   'administrator': 'Administrator',
   'warehouse': 'Warehouse User',
@@ -53,32 +52,28 @@ const UserManagement = () => {
   const navigate = useNavigate();
   const { user } = useSelector(state => state.auth);
   const canManageUsers = hasPermission(user?.role, PERMISSIONS.MANAGE_USERS);
-  
+
   const [users, setUsers] = useState([]);
   const [filteredUsers, setFilteredUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  
-  
+
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(10);
-  
-  
+
   const [searchTerm, setSearchTerm] = useState('');
   const [roleFilter, setRoleFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
-  
-  
+
   const [openDeleteDialog, setOpenDeleteDialog] = useState(false);
   const [currentUser, setCurrentUser] = useState(null);
-  
+
   useEffect(() => {
-    
+
     if (!canManageUsers) {
       navigate('/dashboard');
     }
-    
-    
+
     const fetchUsers = async () => {
       setLoading(true);
       try {
@@ -93,79 +88,77 @@ const UserManagement = () => {
         setLoading(false);
       }
     };
-    
+
     fetchUsers();
   }, [canManageUsers, navigate]);
-  
-  
+
   useEffect(() => {
     const filtered = users.filter(user => {
-      const matchesSearch = searchTerm === '' || 
+      const matchesSearch = searchTerm === '' ||
         user.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
         user.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
         user.username.toLowerCase().includes(searchTerm.toLowerCase());
-      
+
       const matchesRole = roleFilter === '' || user.role === roleFilter;
-      
-      const matchesStatus = statusFilter === '' || 
+
+      const matchesStatus = statusFilter === '' ||
         (statusFilter === 'active' && user.isActive) ||
         (statusFilter === 'inactive' && !user.isActive);
-      
+
       return matchesSearch && matchesRole && matchesStatus;
     });
-    
+
     setFilteredUsers(filtered);
-    setPage(0); 
+    setPage(0);
   }, [searchTerm, roleFilter, statusFilter, users]);
-  
+
   const handleChangePage = (event, newPage) => {
     setPage(newPage);
   };
-  
+
   const handleChangeRowsPerPage = (event) => {
     setRowsPerPage(parseInt(event.target.value, 10));
     setPage(0);
   };
-  
+
   const handleSearchChange = (e) => {
     setSearchTerm(e.target.value);
   };
-  
+
   const handleRoleFilterChange = (e) => {
     setRoleFilter(e.target.value);
   };
-  
+
   const handleStatusFilterChange = (e) => {
     setStatusFilter(e.target.value);
   };
-  
+
   const handleAddUser = () => {
     navigate('/users/new');
   };
-  
+
   const handleEditUser = (userId) => {
     navigate(`/users/edit/${userId}`);
   };
-  
+
   const handleDeleteClick = (user) => {
     setCurrentUser(user);
     setOpenDeleteDialog(true);
   };
-  
+
   const handleCloseDialog = () => {
     setOpenDeleteDialog(false);
     setCurrentUser(null);
   };
-  
+
   const handleDeleteUser = async () => {
     try {
       await api.users.delete(currentUser.id);
-      
-      
+
       const updatedUsers = users.filter(
         user => user.id !== currentUser.id
       );
-      
+
       setUsers(updatedUsers);
       handleCloseDialog();
     } catch (error) {
@@ -173,7 +166,7 @@ const UserManagement = () => {
       setError('Error deleting user. Please try again.');
     }
   };
-  
+
   const getStatusChip = (isActive) => {
     return (
       <Chip
@@ -183,10 +176,10 @@ const UserManagement = () => {
       />
     );
   };
-  
+
   const getRoleChip = (role) => {
     let color;
-    
+
     switch (role) {
       case 'administrator':
         color = 'error';
@@ -203,7 +196,7 @@ const UserManagement = () => {
       default:
         color = 'default';
     }
-    
+
     return (
       <Chip
         label={ROLE_LABELS[role] || role}
@@ -212,14 +205,14 @@ const UserManagement = () => {
       />
     );
   };
-  
+
   return (
     <Box sx={{ p: 3 }}>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
         <Typography variant="h5" component="h1" fontWeight="bold">
           User Management
         </Typography>
-        
+
         <Button
           variant="contained"
           color="primary"
@@ -229,8 +222,7 @@ const UserManagement = () => {
           New User
         </Button>
       </Box>
-      
-      
+
       <Paper sx={{ p: 2, mb: 3 }}>
         <Grid container spacing={2} alignItems="center">
           <Grid item xs={12} sm={6} md={4}>
@@ -280,8 +272,7 @@ const UserManagement = () => {
           </Grid>
         </Grid>
       </Paper>
-      
-      
+
       {loading ? (
         <Box sx={{ display: 'flex', justifyContent: 'center', p: 4 }}>
           <CircularProgress />
@@ -324,8 +315,8 @@ const UserManagement = () => {
                       <TableCell>{getRoleChip(user.role)}</TableCell>
                       <TableCell>{getStatusChip(user.isActive)}</TableCell>
                       <TableCell>
-                        {user.lastLogin 
-                          ? new Date(user.lastLogin).toLocaleString('en-US') 
+                        {user.lastLogin
+                          ? new Date(user.lastLogin).toLocaleString('en-US')
                           : 'Never Logged In'}
                       </TableCell>
                       <TableCell align="right">
@@ -340,7 +331,7 @@ const UserManagement = () => {
                           color="error"
                           size="small"
                           onClick={() => handleDeleteClick(user)}
-                          disabled={user.id === 1} 
+                          disabled={user.id === 1}
                         >
                           <DeleteIcon />
                         </IconButton>
@@ -366,13 +357,12 @@ const UserManagement = () => {
             onPageChange={handleChangePage}
             onRowsPerPageChange={handleChangeRowsPerPage}
             labelRowsPerPage="Rows per page:"
-            labelDisplayedRows={({ from, to, count }) => 
+            labelDisplayedRows={({ from, to, count }) =>
               `${from}-${to} of ${count !== -1 ? count : `more than ${to}`}`}
           />
         </Paper>
       )}
-      
-      
+
       <Dialog open={openDeleteDialog} onClose={handleCloseDialog}>
         <DialogTitle>Delete User</DialogTitle>
         <DialogContent>
