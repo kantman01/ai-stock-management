@@ -13,13 +13,23 @@ import {
   InputAdornment,
   IconButton,
   Link,
+  FormControl,
+  InputLabel,
+  Select,
+  MenuItem,
+  Tabs,
+  Tab
 } from '@mui/material';
 import {
   Visibility,
   VisibilityOff,
   LockOutlined,
+  Person as PersonIcon,
+  Business as BusinessIcon,
+  ShoppingCart as CustomerIcon
 } from '@mui/icons-material';
 import { login, selectIsLoggedIn, selectIsLoading, selectError, clearError } from '../redux/features/authSlice';
+import { getRedirectPathForUser } from '../utils/roleRedirect';
 
 const Login = () => {
   const navigate = useNavigate();
@@ -28,23 +38,29 @@ const Login = () => {
   const isLoggedIn = useSelector(selectIsLoggedIn);
   const isLoading = useSelector(selectIsLoading);
   const error = useSelector(selectError);
+  const user = useSelector(state => state.auth.user);
 
   const [formData, setFormData] = useState({
     email: '',
     password: '',
+    userType: 'staff'
   });
 
   const [showPassword, setShowPassword] = useState(false);
   const [validationErrors, setValidationErrors] = useState({});
   const [formError, setFormError] = useState(null);
+  const [userTypeTabValue, setUserTypeTabValue] = useState(0);
+
+  const userTypeMap = ['staff', 'supplier', 'customer'];
 
   useEffect(() => {
-    if (isLoggedIn) {
-      navigate('/dashboard');
+    if (isLoggedIn && user) { 
+      const redirectPath = getRedirectPathForUser(user);
+      navigate(redirectPath);
     }
 
     dispatch(clearError());
-  }, [isLoggedIn, navigate, dispatch]);
+  }, [isLoggedIn, navigate, dispatch, user]);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -63,6 +79,14 @@ const Login = () => {
 
   const handleTogglePasswordVisibility = () => {
     setShowPassword(!showPassword);
+  };
+
+  const handleUserTypeChange = (event, newValue) => {
+    setUserTypeTabValue(newValue);
+    setFormData({
+      ...formData,
+      userType: userTypeMap[newValue]
+    });
   };
 
   const validateForm = () => {
@@ -97,7 +121,6 @@ const Login = () => {
         password: formData.password
       }));
       
-      // Navigation will happen in the useEffect when isLoggedIn updates
     } catch (error) {
       setFormError(error.response?.data?.message || 'Login failed. Please check your credentials.');
     }
@@ -143,7 +166,7 @@ const Login = () => {
             Login
           </Typography>
 
-          <Typography variant="body2" color="text.secondary" align="center" sx={{ mb: 3 }}>
+          <Typography variant="body2" color="text.secondary" align="center" sx={{ mb: 2 }}>
             Welcome to AI Stock Management System
           </Typography>
 

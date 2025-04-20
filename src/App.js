@@ -12,17 +12,20 @@ import Products from './pages/stock/Products';
 import Categories from './pages/stock/Categories';
 import StockMovements from './pages/stock/StockMovements';
 import Orders from './pages/Orders';
+import OrderDetail from './pages/OrderDetail';
 import SupplierOrders from './pages/SupplierOrders';
 import Customers from './pages/Customers';
 import Suppliers from './pages/Suppliers';
 import Reports from './pages/Reports';
-import Settings from './pages/Settings';
 import Profile from './pages/Profile';
 import UserManagement from './pages/UserManagement';
 import UserForm from './pages/UserForm';
 import Unauthorized from './pages/Unauthorized';
 import ForgotPassword from './pages/ForgotPassword';
 import ResetPassword from './pages/ResetPassword';
+import AIInsights from './pages/AIInsights';
+import AIActionHistory from './pages/AIActionHistory';
+import AITester from './components/AITester';
 
 import PrivateRoute from './components/PrivateRoute';
 import { PERMISSIONS } from './utils/roles';
@@ -38,10 +41,6 @@ const PublicRoute = ({ children }) => {
 
   const publicPaths = ['/login', '/register', '/unauthorized'];
   const isPublicPath = publicPaths.includes(location.pathname);
-
-  if (isLoggedIn && isPublicPath) {
-    return <Navigate to="/dashboard" replace />;
-  }
 
   if (!isLoggedIn && !isPublicPath && location.pathname !== '/') {
     return <Navigate to="/login" state={{ from: location.pathname }} replace />;
@@ -127,6 +126,15 @@ function App() {
           />
 
           <Route
+            path="orders/:id"
+            element={
+              <PrivateRoute requiredPermission={PERMISSIONS.VIEW_ORDERS}>
+                <OrderDetail />
+              </PrivateRoute>
+            }
+          />
+
+          <Route
             path="supplier-orders"
             element={
               <PrivateRoute requiredPermission={PERMISSIONS.MANAGE_INVENTORY}>
@@ -157,6 +165,25 @@ function App() {
             path="ai-analytics"
             element={
               <PrivateRoute requiredPermission={PERMISSIONS.VIEW_AI_ANALYTICS}>
+                <AIInsights />
+              </PrivateRoute>
+            }
+          />
+
+          <Route
+            path="ai-action-history"
+            element={
+              <PrivateRoute requiredPermission={PERMISSIONS.VIEW_AI_ANALYTICS}>
+                <AIActionHistory />
+              </PrivateRoute>
+            }
+          />
+
+          <Route
+            path="ai-tester"
+            element={
+              <PrivateRoute requiredPermission={PERMISSIONS.VIEW_AI_ANALYTICS}>
+                <AITester />
               </PrivateRoute>
             }
           />
@@ -215,7 +242,6 @@ function App() {
             />
           </Route>
 
-          <Route path="settings" element={<Settings />} />
           <Route path="profile" element={<Profile />} />
         </Route>
 

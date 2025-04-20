@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useSelector, useDispatch } from 'react-redux';
 import {
@@ -15,7 +15,9 @@ import {
   Avatar,
   Typography,
   Button,
-  Stack
+  Stack,
+  useMediaQuery,
+  useTheme
 } from '@mui/material';
 import {
   Dashboard as DashboardIcon,
@@ -33,10 +35,13 @@ import {
   BubbleChart as AIIcon,
   PersonAdd as UserManagementIcon,
   ExitToApp as LogoutIcon,
-  Person as PersonIcon
+  Person as PersonIcon,
+  Insights as AIInsightsIcon,
+  BugReport as BugReportIcon,
+  History as HistoryIcon
 } from '@mui/icons-material';
 import { styled } from '@mui/material/styles';
-import { PERMISSIONS, canAccessMenuItem } from '../../utils/roles';
+import { PERMISSIONS, canAccessMenuItem } from '../../utils/permissions';
 import { selectUser, logout } from '../../redux/features/authSlice';
 
 const StyledDrawer = styled(Drawer)(({ theme, drawerWidth }) => ({
@@ -47,6 +52,10 @@ const StyledDrawer = styled(Drawer)(({ theme, drawerWidth }) => ({
     boxSizing: 'border-box',
     backgroundColor: theme.palette.background.paper,
     boxShadow: '2px 0 10px rgba(0, 0, 0, 0.1)',
+    transition: theme.transitions.create('width', {
+      easing: theme.transitions.easing.sharp,
+      duration: theme.transitions.duration.enteringScreen,
+    }),
   },
 }));
 
@@ -55,10 +64,13 @@ const Sidebar = ({ open, onClose, drawerWidth = 250 }) => {
   const location = useLocation();
   const dispatch = useDispatch();
   const user = useSelector(selectUser);
+  const theme = useTheme();
+  const isDesktop = useMediaQuery(theme.breakpoints.up('md'));
 
   const [stockOpen, setStockOpen] = React.useState(false);
   const [reportsOpen, setReportsOpen] = React.useState(false);
   const [userManagementOpen, setUserManagementOpen] = React.useState(false);
+  const [aiMenuOpen, setAIMenuOpen] = React.useState(false);
 
   const handleStockClick = () => {
     setStockOpen(!stockOpen);
@@ -79,7 +91,8 @@ const Sidebar = ({ open, onClose, drawerWidth = 250 }) => {
 
   const isSelected = (path) => location.pathname === path;
 
-  const menuItems = [
+  
+  const staffMenuItems = [
     {
       text: 'Dashboard',
       icon: <DashboardIcon />,
@@ -121,7 +134,7 @@ const Sidebar = ({ open, onClose, drawerWidth = 250 }) => {
       permission: [PERMISSIONS.VIEW_ORDERS, PERMISSIONS.MANAGE_ORDERS, PERMISSIONS.CREATE_ORDERS],
     },
     {
-      text: 'Supplier Orders',
+      text: 'Manage Supplier Orders',
       icon: <SuppliersIcon />,
       path: '/supplier-orders',
       permission: PERMISSIONS.MANAGE_INVENTORY,
@@ -141,36 +154,36 @@ const Sidebar = ({ open, onClose, drawerWidth = 250 }) => {
     {
       text: 'Reports',
       icon: <ReportIcon />,
-      submenu: true,
-      onClick: handleReportsClick,
-      open: reportsOpen,
+      path: '/reports/sales',
       permission: [PERMISSIONS.VIEW_SALES_REPORT, PERMISSIONS.VIEW_STOCK_REPORT, PERMISSIONS.VIEW_CUSTOMER_REPORT],
-      items: [
-        {
-          text: 'Sales Report',
-          icon: <ReportIcon />,
-          path: '/reports/sales',
-          permission: PERMISSIONS.VIEW_SALES_REPORT,
-        },
-        {
-          text: 'Stock Report',
-          icon: <ReportIcon />,
-          path: '/reports/stock',
-          permission: PERMISSIONS.VIEW_STOCK_REPORT,
-        },
-        {
-          text: 'Customer Report',
-          icon: <ReportIcon />,
-          path: '/reports/customers',
-          permission: PERMISSIONS.VIEW_CUSTOMER_REPORT,
-        },
-      ],
     },
     {
-      text: 'AI Analytics',
-      icon: <AIIcon />,
-      path: '/ai-analytics',
-      permission: PERMISSIONS.VIEW_AI_ANALYTICS,
+      text: 'AI Insights',
+      icon: <AIInsightsIcon />,
+      submenu: true,
+      onClick: () => setAIMenuOpen(!aiMenuOpen),
+      open: aiMenuOpen,
+      permission: [PERMISSIONS.VIEW_AI_ANALYTICS],
+      items: [
+        {
+          text: 'Analytics',
+          icon: <AIInsightsIcon />,
+          path: '/ai-analytics',
+          permission: PERMISSIONS.VIEW_AI_ANALYTICS,
+        },
+        {
+          text: 'Action History',
+          icon: <HistoryIcon />,
+          path: '/ai-action-history',
+          permission: PERMISSIONS.VIEW_AI_ANALYTICS,
+        },
+        {
+          text: 'API Tester',
+          icon: <BugReportIcon />,
+          path: '/ai-tester',
+          permission: PERMISSIONS.VIEW_AI_ANALYTICS,
+        },
+      ],
     },
     {
       text: 'User Management',
@@ -194,28 +207,99 @@ const Sidebar = ({ open, onClose, drawerWidth = 250 }) => {
         },
       ],
     },
+  ];
+
+  
+  const supplierMenuItems = [
     {
-      text: 'Settings',
-      icon: <SettingsIcon />,
-      path: '/settings',
+      text: 'Dashboard',
+      icon: <DashboardIcon />,
+      path: '/dashboard',
+      permission: null, 
+    },
+    {
+      text: 'My Products',
+      icon: <InventoryIcon />,
+      path: '/stock/products',
+      permission: null,
+    },
+    {
+      text: 'Process Orders',
+      icon: <OrdersIcon />,
+      path: '/supplier-orders',
+      permission: null,
     },
   ];
+
+  
+  const customerMenuItems = [
+    {
+      text: 'Dashboard',
+      icon: <DashboardIcon />,
+      path: '/dashboard',
+      permission: null, 
+    },
+    {
+      text: 'Browse Products',
+      icon: <InventoryIcon />,
+      path: '/stock/products',
+      permission: null,
+    },
+    {
+      text: 'My Orders',
+      icon: <OrdersIcon />,
+      path: '/orders',
+      permission: null,
+    },
+  ];
+
+  
+  let menuItems = staffMenuItems;
+  if (user) {
+    switch (user.role.code.toLowerCase()) {
+      case 'supplier':
+        menuItems = supplierMenuItems;
+        break;
+      case 'customer':
+        menuItems = customerMenuItems;
+        break;
+      default:
+        menuItems = staffMenuItems;
+    }
+  }
 
   const renderSubMenu = (items) => {
     return (
       <Collapse in={items.open} timeout="auto" unmountOnExit>
         <List component="div" disablePadding>
           {items.items.map((subItem) =>
-
-            canAccessMenuItem(user?.role?.code, subItem.permission) && (
+            (subItem.permission === null || canAccessMenuItem(user, subItem.permission)) && (
               <ListItem
                 key={subItem.text}
                 disablePadding
                 sx={{ pl: 4 }}
-                onClick={() => navigate(subItem.path)}
+                onClick={() => {
+                  navigate(subItem.path);
+                  if (!isDesktop) onClose();
+                }}
               >
-                <ListItemButton selected={isSelected(subItem.path)}>
-                  <ListItemIcon>
+                <ListItemButton 
+                  selected={isSelected(subItem.path)}
+                  sx={{
+                    py: 1,
+                    '&.Mui-selected': {
+                      bgcolor: 'primary.light',
+                      color: 'primary.contrastText',
+                      '&:hover': {
+                        bgcolor: 'primary.main',
+                      },
+                      '& .MuiListItemIcon-root': {
+                        color: 'primary.contrastText',
+                      }
+                    },
+                  }}
+                >
+                  <ListItemIcon sx={{ color: 'primary.main', minWidth: 40 }}>
                     {subItem.icon}
                   </ListItemIcon>
                   <ListItemText primary={subItem.text} />
@@ -228,17 +312,33 @@ const Sidebar = ({ open, onClose, drawerWidth = 250 }) => {
     );
   };
 
-  return (
-    <StyledDrawer
-      variant="temporary"
-      anchor="left"
-      open={open}
-      onClose={onClose}
-      drawerWidth={drawerWidth}
-    >
-
+  
+  useEffect(() => {
+    const currentPath = location.pathname;
+    if (currentPath.startsWith('/stock')) {
+      setStockOpen(true);
+    } else if (currentPath.startsWith('/reports')) {
+      setReportsOpen(true);
+    } else if (currentPath.startsWith('/users')) {
+      setUserManagementOpen(true);
+    } else if (currentPath.startsWith('/ai-')) {
+      setAIMenuOpen(true);
+    }
+  }, [location.pathname]);
+  
+  const drawerContent = (
+    <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+     
       {user && (
-        <Box sx={{ p: 2, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+        <Box sx={{ 
+          p: 2, 
+          display: 'flex', 
+          flexDirection: 'column', 
+          alignItems: 'center',
+          bgcolor: 'primary.light',
+          color: 'primary.contrastText',
+          py: 3
+        }}>
           <Avatar
             src={user.avatar}
             alt={user.firstName}
@@ -246,24 +346,38 @@ const Sidebar = ({ open, onClose, drawerWidth = 250 }) => {
               width: 64,
               height: 64,
               mb: 1,
-              bgcolor: 'primary.main'
+              bgcolor: 'white',
+              color: 'primary.main',
+              boxShadow: '0px 2px 8px rgba(0,0,0,0.2)'
             }}
           >
-            {!user.avatar && (user.firstName?.charAt(0) || <PersonIcon />)}
+            {!user.avatar && ((user.firstName?.charAt(0) || user.companyName?.charAt(0) || <PersonIcon />))}
           </Avatar>
-          <Typography variant="subtitle1" fontWeight="bold">
-            {user.firstName} {user.lastName}
+          <Typography variant="subtitle1" fontWeight="bold" sx={{ mt: 1 }}>
+            {user.role.code === 'supplier' 
+              ? user.supplier?.name
+              : `${user.firstName || ''} ${user.lastName || ''}`
+            }
           </Typography>
-          <Typography variant="body2" color="text.secondary" gutterBottom>
-            {user.role?.name || user.email}
+          <Typography variant="body2" sx={{ opacity: 0.9 }} gutterBottom>
+            {user.role.code === 'supplier' 
+              ? 'Supplier' 
+              : user.role.code === 'customer' 
+                ? 'Customer' 
+                : user.role?.code || user.email}
           </Typography>
-          <Stack direction="row" spacing={1} sx={{ mt: 1, width: '100%' }}>
+          <Stack direction="row" spacing={1} sx={{ mt: 2, width: '100%' }}>
             <Button
-              variant="outlined"
+              variant="contained"
               size="small"
               startIcon={<PersonIcon />}
               fullWidth
-              onClick={() => navigate('/profile')}
+              onClick={() => navigate(user.role.code === 'supplier' 
+                ? '/profile' 
+                : user.role.code === 'customer' 
+                  ? '/profile' 
+                  : '/profile')}
+              sx={{ bgcolor: 'white', color: 'primary.main', '&:hover': { bgcolor: 'grey.100' } }}
             >
               Profile
             </Button>
@@ -274,6 +388,7 @@ const Sidebar = ({ open, onClose, drawerWidth = 250 }) => {
               startIcon={<LogoutIcon />}
               fullWidth
               onClick={handleLogout}
+              sx={{ bgcolor: 'rgba(255,255,255,0.1)', color: 'white', borderColor: 'white', '&:hover': { borderColor: 'white', bgcolor: 'rgba(255,255,255,0.2)' } }}
             >
               Logout
             </Button>
@@ -282,10 +397,9 @@ const Sidebar = ({ open, onClose, drawerWidth = 250 }) => {
       )}
       <Divider />
 
-      <List>
+      <List sx={{ pt: 1, overflowY: 'auto', flexGrow: 1 }}>
         {menuItems.map((item) => {
-
-          if (item.permission && !canAccessMenuItem(user?.role?.code, item.permission)) {
+          if (item.permission !== null && !canAccessMenuItem(user, item.permission)) {
             return null;
           }
 
@@ -293,8 +407,16 @@ const Sidebar = ({ open, onClose, drawerWidth = 250 }) => {
             <div key={item.text}>
               <ListItem disablePadding>
                 {item.submenu ? (
-                  <ListItemButton onClick={item.onClick}>
-                    <ListItemIcon>
+                  <ListItemButton 
+                    onClick={item.onClick}
+                    sx={{ 
+                      py: 1.2,
+                      '&:hover': {
+                        bgcolor: 'action.hover',
+                      },
+                    }}
+                  >
+                    <ListItemIcon sx={{ color: 'primary.main', minWidth: 40 }}>
                       {item.icon}
                     </ListItemIcon>
                     <ListItemText primary={item.text} />
@@ -304,9 +426,25 @@ const Sidebar = ({ open, onClose, drawerWidth = 250 }) => {
                   <Tooltip title={item.text} placement="right">
                     <ListItemButton
                       selected={isSelected(item.path)}
-                      onClick={() => navigate(item.path)}
+                      onClick={() => { 
+                        navigate(item.path);
+                        if (!isDesktop) onClose();
+                      }}
+                      sx={{
+                        py: 1.2,
+                        '&.Mui-selected': {
+                          bgcolor: 'primary.light',
+                          color: 'primary.contrastText',
+                          '&:hover': {
+                            bgcolor: 'primary.main',
+                          },
+                          '& .MuiListItemIcon-root': {
+                            color: 'primary.contrastText',
+                          }
+                        },
+                      }}
                     >
-                      <ListItemIcon>
+                      <ListItemIcon sx={{ color: 'primary.main', minWidth: 40 }}>
                         {item.icon}
                       </ListItemIcon>
                       <ListItemText primary={item.text} />
@@ -319,7 +457,57 @@ const Sidebar = ({ open, onClose, drawerWidth = 250 }) => {
           );
         })}
       </List>
-    </StyledDrawer>
+    </Box>
+  );
+
+  return (
+    <>
+      {/* Mobile drawer - temporary */}
+      {!isDesktop && (
+        <Drawer
+          variant="temporary"
+          open={open}
+          onClose={onClose}
+          ModalProps={{
+            keepMounted: true, 
+          }}
+          sx={{
+            display: { xs: 'block', md: 'none' },
+            '& .MuiDrawer-paper': {
+              boxSizing: 'border-box',
+              width: drawerWidth,
+              boxShadow: '2px 0 10px rgba(0, 0, 0, 0.15)',
+            },
+          }}
+        >
+          {drawerContent}
+        </Drawer>
+      )}
+      
+      {/* Desktop drawer - persistent */}
+      {isDesktop && (
+        <Drawer
+          variant="persistent"
+          open={open}
+          sx={{
+            display: { xs: 'none', md: 'block' },
+            '& .MuiDrawer-paper': {
+              boxSizing: 'border-box',
+              width: drawerWidth,
+              boxShadow: open ? '2px 0 10px rgba(0, 0, 0, 0.15)' : 'none',
+              borderRight: '1px solid rgba(0, 0, 0, 0.05)',
+              transform: open ? 'none' : 'translateX(-100%)',
+              transition: theme => theme.transitions.create(['transform', 'width', 'box-shadow'], {
+                easing: theme.transitions.easing.sharp,
+                duration: theme.transitions.duration.enteringScreen,
+              }),
+            },
+          }}
+        >
+          {drawerContent}
+        </Drawer>
+      )}
+    </>
   );
 };
 

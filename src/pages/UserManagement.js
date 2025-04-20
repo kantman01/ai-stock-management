@@ -39,13 +39,15 @@ import { useSelector } from 'react-redux';
 import { hasPermission } from '../utils/roles';
 import { PERMISSIONS } from '../utils/roles';
 import { useNavigate } from 'react-router-dom';
-import api from '../services/api';
-
+import { apiServices } from '../services/api';
+import {userService} from '../services/api';
 const ROLE_LABELS = {
   'administrator': 'Administrator',
-  'warehouse': 'Warehouse User',
-  'customer': 'Customer',
-  'supplier': 'Supplier'
+  'manager': 'Manager',
+  'warehouse': 'Warehouse Manager',
+  'sales': 'Sales Representative',
+  'supplier': 'Supplier',
+  'staff': 'Staff'
 };
 
 const UserManagement = () => {
@@ -71,15 +73,19 @@ const UserManagement = () => {
   useEffect(() => {
 
     if (!canManageUsers) {
-      navigate('/dashboard');
+     //navigate('/dashboard');
     }
 
     const fetchUsers = async () => {
       setLoading(true);
       try {
-        const response = await api.users.getAll();
-        setUsers(response.data);
-        setFilteredUsers(response.data);
+        const response = await apiServices.users.getUsers();
+        if (response.users) {
+          setUsers(response.users);
+          setFilteredUsers(response.users);
+        } else {
+          setError('Invalid response format from server');
+        }
         setError(null);
       } catch (error) {
         console.error('Error fetching users:', error);
@@ -95,11 +101,12 @@ const UserManagement = () => {
   useEffect(() => {
     const filtered = users.filter(user => {
       const matchesSearch = searchTerm === '' ||
-        user.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        user.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        user.username.toLowerCase().includes(searchTerm.toLowerCase());
+        user.firstName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        user.lastName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        user.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        `${user.firstName} ${user.lastName}`.toLowerCase().includes(searchTerm.toLowerCase());
 
-      const matchesRole = roleFilter === '' || user.role === roleFilter;
+      const matchesRole = roleFilter === '' || user.role?.code === roleFilter;
 
       const matchesStatus = statusFilter === '' ||
         (statusFilter === 'active' && user.isActive) ||
@@ -153,7 +160,7 @@ const UserManagement = () => {
 
   const handleDeleteUser = async () => {
     try {
-      await api.users.delete(currentUser.id);
+      await userService.deleteUser(currentUser.id);
 
       const updatedUsers = users.filter(
         user => user.id !== currentUser.id
@@ -162,8 +169,8 @@ const UserManagement = () => {
       setUsers(updatedUsers);
       handleCloseDialog();
     } catch (error) {
-      console.error('Error deleting user:', error);
-      setError('Error deleting user. Please try again.');
+      handleCloseDialog();
+      setError('This user cannot be deleted due to system requirements.');
     }
   };
 
@@ -178,9 +185,11 @@ const UserManagement = () => {
   };
 
   const getRoleChip = (role) => {
+    if (!role) return <Chip label="Unknown" color="default" size="small" />;
+    
     let color;
 
-    switch (role) {
+    switch (role.code) {
       case 'administrator':
         color = 'error';
         break;
@@ -199,7 +208,7 @@ const UserManagement = () => {
 
     return (
       <Chip
-        label={ROLE_LABELS[role] || role}
+        label={role.name || ROLE_LABELS[role.code] || role.code || 'Unknown'}
         color={color}
         size="small"
       />
@@ -277,10 +286,11 @@ const UserManagement = () => {
         <Box sx={{ display: 'flex', justifyContent: 'center', p: 4 }}>
           <CircularProgress />
         </Box>
-      ) : error ? (
-        <Alert severity="error">{error}</Alert>
       ) : (
         <Paper sx={{ width: '100%' }}>
+          {error && (
+            <Alert severity="error">{error}</Alert>
+          )}
           <TableContainer>
             <Table sx={{ minWidth: 650 }}>
               <TableHead>
@@ -303,10 +313,10 @@ const UserManagement = () => {
                           <PersonIcon sx={{ mr: 1, color: 'action.active' }} />
                           <Box>
                             <Typography variant="body2" fontWeight="bold">
-                              {user.name}
+                              {user.firstName} {user.lastName}
                             </Typography>
                             <Typography variant="caption" color="text.secondary">
-                              @{user.username}
+                              {user.email}
                             </Typography>
                           </Box>
                         </Box>
@@ -367,7 +377,7 @@ const UserManagement = () => {
         <DialogTitle>Delete User</DialogTitle>
         <DialogContent>
           <DialogContentText>
-            Are you sure you want to delete user "{currentUser?.name}"?
+            Are you sure you want to delete user "{currentUser?.firstName} {currentUser?.lastName}"?
             This action cannot be undone.
           </DialogContentText>
         </DialogContent>

@@ -4,8 +4,6 @@
 import store from '../redux/store';
 export const ROLES = {
   ADMIN: 'admin',
-  CUSTOMER: 'customer',
-  SUPPLIER: 'supplier',
   WAREHOUSE: 'warehouse'
 };
 
@@ -51,7 +49,7 @@ export const hasPermission = (userRole, permission) => {
   if (!permission) return false;
 
   const state = store.getState();
-  const { permissions } = state.auth;
+  const { permissions } = state.auth.user.role;
 
   return permissions.includes(permission);
 };

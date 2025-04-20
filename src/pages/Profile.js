@@ -20,23 +20,31 @@ import {
   CardContent,
   FormControlLabel,
   Switch,
-  Chip
+  Chip,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow
 } from '@mui/material';
 import {
   Save as SaveIcon,
   Person as PersonIcon,
   Security as SecurityIcon,
-  Notifications as NotificationsIcon,
   History as HistoryIcon,
-  Check as CheckIcon,
   Login as LoginIcon,
   Devices as DevicesIcon,
-  Edit as EditIcon
+  Check as CheckIcon,
+  Business as BusinessIcon,
+  ShoppingCart as ShoppingCartIcon
 } from '@mui/icons-material';
-import { useSelector } from 'react-redux';
-import api from '../services/api';
+import { useSelector, useDispatch } from 'react-redux';
+import api, { userService } from '../services/api';
+import { updateCurrentUser } from '../redux/features/authSlice';
 
 const Profile = () => {
+  const dispatch = useDispatch();
   const { user } = useSelector(state => state.auth);
   const [activeTab, setActiveTab] = useState(0);
   const [loading, setLoading] = useState(false);
@@ -46,7 +54,8 @@ const Profile = () => {
   const [avatarPreview, setAvatarPreview] = useState(null);
 
   const [profileData, setProfileData] = useState({
-    name: '',
+    firstName: '',
+    lastName: '',
     email: '',
     phone: '',
     position: '',
@@ -54,19 +63,33 @@ const Profile = () => {
     bio: ''
   });
 
+  const [supplierData, setSupplierData] = useState({
+    supplierName: '',
+    address: '',
+    city: '',
+    country: '',
+    state: '',
+    postalCode: '',
+    website: '',
+    taxId: '',
+    paymentTerms: '',
+    notes: ''
+  });
+
+  const [customerData, setCustomerData] = useState({
+    address: '',
+    city: '',
+    country: '',
+    state: '',
+    postalCode: '',
+    companyName: '',
+    notes: ''
+  });
+
   const [passwordData, setPasswordData] = useState({
     currentPassword: '',
     newPassword: '',
     confirmPassword: ''
-  });
-
-  const [notificationPreferences, setNotificationPreferences] = useState({
-    emailNotifications: true,
-    browserNotifications: false,
-    orderUpdates: true,
-    stockAlerts: true,
-    securityAlerts: true,
-    marketingEmails: false
   });
 
   const [loginHistory] = useState([
@@ -78,16 +101,45 @@ const Profile = () => {
   ]);
 
   useEffect(() => {
-
     if (user) {
       setProfileData({
-        name: user.name || '',
+        firstName: user.firstName || '',
+        lastName: user.lastName || '',
         email: user.email || '',
-        phone: user.phone || '',
+        phone: user.phone || (user.supplier?.phone || user.customer?.phone || ''),
         position: user.position || '',
         department: user.department || '',
         bio: user.bio || ''
       });
+
+      
+      if (user.supplier) {
+        setSupplierData({
+          supplierName: user.supplier.name || '',
+          address: user.supplier.address || '',
+          city: user.supplier.city || '',
+          country: user.supplier.country || '',
+          state: user.supplier.state || '',
+          postalCode: user.supplier.postal_code || '',
+          website: user.supplier.website || '',
+          taxId: user.supplier.tax_id || '',
+          paymentTerms: user.supplier.payment_terms || '',
+          notes: user.supplier.notes || ''
+        });
+      }
+
+      
+      if (user.customer) {
+        setCustomerData({
+          address: user.customer.address || '',
+          city: user.customer.city || '',
+          country: user.customer.country || '',
+          state: user.customer.state || '',
+          postalCode: user.customer.postal_code || '',
+          companyName: user.customer.company_name || '',
+          notes: user.customer.notes || ''
+        });
+      }
     }
   }, [user]);
 
@@ -103,6 +155,22 @@ const Profile = () => {
     });
   };
 
+  const handleSupplierChange = (e) => {
+    const { name, value } = e.target;
+    setSupplierData({
+      ...supplierData,
+      [name]: value
+    });
+  };
+
+  const handleCustomerChange = (e) => {
+    const { name, value } = e.target;
+    setCustomerData({
+      ...customerData,
+      [name]: value
+    });
+  };
+
   const handlePasswordChange = (e) => {
     const { name, value } = e.target;
     setPasswordData({
@@ -111,51 +179,127 @@ const Profile = () => {
     });
   };
 
-  const handleNotificationChange = (e) => {
-    const { name, checked } = e.target;
-    setNotificationPreferences({
-      ...notificationPreferences,
-      [name]: checked
-    });
-  };
-
-  const handleAvatarChange = (e) => {
-    const file = e.target.files[0];
-    if (file) {
-      setAvatarFile(file);
-
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setAvatarPreview(reader.result);
-      };
-      reader.readAsDataURL(file);
-    }
-  };
 
   const handleSaveProfile = () => {
     setLoading(true);
     setError(null);
     setSuccess(false);
 
-    setTimeout(() => {
-      setLoading(false);
-      setSuccess(true);
+    let updateData = {};
+    updateData = {
+      firstName: profileData.firstName,
+      lastName: profileData.lastName,
+      phone: profileData.phone,
+      position: profileData.position,
+      department: profileData.department,
+      bio: profileData.bio
+    };
 
-      setTimeout(() => {
-        setSuccess(false);
-      }, 3000);
-    }, 1000);
+    
+    if (user.supplier) {
+      updateData = {
+        ...updateData,
+        supplierName: supplierData.supplierName,
+        address: supplierData.address,
+        city: supplierData.city,
+        country: supplierData.country,
+        state: supplierData.state,
+        postalCode: supplierData.postalCode,
+        website: supplierData.website,
+        taxId: supplierData.taxId,
+        paymentTerms: supplierData.paymentTerms,
+        notes: supplierData.notes
+      };
+    }
+
+    
+    if (user.customer) {
+      updateData = {
+        ...updateData,
+        address: customerData.address,
+        city: customerData.city,
+        country: customerData.country,
+        state: customerData.state,
+        postalCode: customerData.postalCode,
+        companyName: customerData.companyName,
+        notes: customerData.notes
+      };
+    }
+
+    userService.updateProfile(updateData)
+      .then(response => {
+        setLoading(false);
+        setSuccess(true);
+        
+        
+        if (response.user) {
+          
+          dispatch(updateCurrentUser(response.user));
+          
+          
+          const updatedUser = response.user;
+          setProfileData({
+            firstName: updatedUser.firstName || '',
+            lastName: updatedUser.lastName || '',
+            email: updatedUser.email || '',
+            phone: updatedUser.phone || '',
+            position: updatedUser.position || '',
+            department: updatedUser.department || '',
+            bio: updatedUser.bio || ''
+          });
+
+          console.log("response.user",response.user)
+          console.log("updatedUser",updatedUser)
+
+          
+          if (updatedUser.supplier) {
+            setSupplierData({
+              supplierName: updatedUser.supplier.name || '',
+              address: updatedUser.supplier.address || '',
+              city: updatedUser.supplier.city || '',
+              country: updatedUser.supplier.country || '',
+              state: updatedUser.supplier.state || '',
+              postalCode: updatedUser.supplier.postalCode || '',
+              website: updatedUser.supplier.website || '',
+              taxId: updatedUser.supplier.taxId || '',
+              paymentTerms: updatedUser.supplier.paymentTerms || '',
+              notes: updatedUser.supplier.notes || ''
+            });
+          }
+
+          
+          if (updatedUser.customer) {
+            setCustomerData({
+              address: updatedUser.customer.address || '',
+              city: updatedUser.customer.city || '',
+              country: updatedUser.customer.country || '',
+              state: updatedUser.customer.state || '',
+              postalCode: updatedUser.customer.postalCode || '',
+              companyName: updatedUser.customer.companyName || '',
+              notes: updatedUser.customer.notes || ''
+            });
+          }
+        }
+
+        setTimeout(() => {
+          setSuccess(false);
+        }, 3000);
+      })
+      .catch(err => {
+        setLoading(false);
+        setError(err.response?.data?.message || 'An error occurred while updating your profile.');
+        console.error('Error updating profile:', err);
+      });
   };
 
   const handleSavePassword = () => {
-
     if (passwordData.newPassword !== passwordData.confirmPassword) {
-      setError('Yeni şifreler eşleşmiyor.');
+      setError('New passwords do not match.');
       return;
     }
 
     if (passwordData.newPassword.length < 6) {
-      setError('Şifre en az 6 karakter olmalıdır.');
+      setError('Password must be at least 6 characters.');
       return;
     }
 
@@ -163,35 +307,221 @@ const Profile = () => {
     setError(null);
     setSuccess(false);
 
-    setTimeout(() => {
-      setLoading(false);
-      setSuccess(true);
+    api.post('/auth/change-password', {
+      currentPassword: passwordData.currentPassword,
+      newPassword: passwordData.newPassword
+    })
+      .then(response => {
+        setLoading(false);
+        setSuccess(true);
 
-      setPasswordData({
-        currentPassword: '',
-        newPassword: '',
-        confirmPassword: ''
+        
+        setPasswordData({
+          currentPassword: '',
+          newPassword: '',
+          confirmPassword: ''
+        });
+
+        setTimeout(() => {
+          setSuccess(false);
+        }, 3000);
+      })
+      .catch(err => {
+        setLoading(false);
+        setError(err.response?.data?.message || 'An error occurred while changing your password.');
+        console.error('Error changing password:', err);
       });
-
-      setTimeout(() => {
-        setSuccess(false);
-      }, 3000);
-    }, 1000);
   };
 
-  const handleSaveNotifications = () => {
-    setLoading(true);
-    setError(null);
-    setSuccess(false);
+  const renderSupplierDetails = () => {
+    if (!user || !user.supplier) return null;
+    
+    return (
+      <Paper sx={{ p: 3, mt: 3 }}>
+        <Typography variant="h6" gutterBottom>
+          <BusinessIcon sx={{ mr: 1, verticalAlign: 'middle' }} />
+          Supplier Information
+        </Typography>
+        <Divider sx={{ mb: 3 }} />
+        
+        <Grid container spacing={3}>
+          <Grid item xs={12} md={6}>
+            <TextField
+              name="supplierName"
+              label="Company Name"
+              fullWidth
+              value={supplierData.supplierName}
+              onChange={handleSupplierChange}
+            />
+          </Grid>
+          <Grid item xs={12}>
+            <TextField
+              name="address"
+              label="Address"
+              fullWidth
+              value={supplierData.address}
+              onChange={handleSupplierChange}
+            />
+          </Grid>
+          <Grid item xs={12} md={4}>
+            <TextField
+              name="city"
+              label="City"
+              fullWidth
+              value={supplierData.city}
+              onChange={handleSupplierChange}
+            />
+          </Grid>
+          <Grid item xs={12} md={4}>
+            <TextField
+              name="state"
+              label="State/Province"
+              fullWidth
+              value={supplierData.state}
+              onChange={handleSupplierChange}
+            />
+          </Grid>
+          <Grid item xs={12} md={4}>
+            <TextField
+              name="postalCode"
+              label="Postal Code"
+              fullWidth
+              value={supplierData.postalCode}
+              onChange={handleSupplierChange}
+            />
+          </Grid>
+          <Grid item xs={12} md={6}>
+            <TextField
+              name="country"
+              label="Country"
+              fullWidth
+              value={supplierData.country}
+              onChange={handleSupplierChange}
+            />
+          </Grid>
+          <Grid item xs={12} md={6}>
+            <TextField
+              name="website"
+              label="Website"
+              fullWidth
+              value={supplierData.website}
+              onChange={handleSupplierChange}
+            />
+          </Grid>
+          <Grid item xs={12} md={6}>
+            <TextField
+              name="taxId"
+              label="Tax ID"
+              fullWidth
+              value={supplierData.taxId}
+              onChange={handleSupplierChange}
+            />
+          </Grid>
+          <Grid item xs={12} md={6}>
+            <TextField
+              name="paymentTerms"
+              label="Payment Terms"
+              fullWidth
+              value={supplierData.paymentTerms}
+              onChange={handleSupplierChange}
+            />
+          </Grid>
+          <Grid item xs={12}>
+            <TextField
+              name="notes"
+              label="Notes"
+              multiline
+              rows={3}
+              fullWidth
+              value={supplierData.notes}
+              onChange={handleSupplierChange}
+            />
+          </Grid>
+        </Grid>
+      </Paper>
+    );
+  };
 
-    setTimeout(() => {
-      setLoading(false);
-      setSuccess(true);
-
-      setTimeout(() => {
-        setSuccess(false);
-      }, 3000);
-    }, 1000);
+  const renderCustomerDetails = () => {
+    if (!user || !user.customer) return null;
+    
+    return (
+      <Paper sx={{ p: 3, mt: 3 }}>
+        <Typography variant="h6" gutterBottom>
+          <ShoppingCartIcon sx={{ mr: 1, verticalAlign: 'middle' }} />
+          Customer Information
+        </Typography>
+        <Divider sx={{ mb: 3 }} />
+        
+        <Grid container spacing={3}>
+          <Grid item xs={12}>
+            <TextField
+              name="companyName"
+              label="Company Name"
+              fullWidth
+              value={customerData.companyName}
+              onChange={handleCustomerChange}
+            />
+          </Grid>
+          <Grid item xs={12}>
+            <TextField
+              name="address"
+              label="Address"
+              fullWidth
+              value={customerData.address}
+              onChange={handleCustomerChange}
+            />
+          </Grid>
+          <Grid item xs={12} md={4}>
+            <TextField
+              name="city"
+              label="City"
+              fullWidth
+              value={customerData.city}
+              onChange={handleCustomerChange}
+            />
+          </Grid>
+          <Grid item xs={12} md={4}>
+            <TextField
+              name="state"
+              label="State/Province"
+              fullWidth
+              value={customerData.state}
+              onChange={handleCustomerChange}
+            />
+          </Grid>
+          <Grid item xs={12} md={4}>
+            <TextField
+              name="postalCode"
+              label="Postal Code"
+              fullWidth
+              value={customerData.postalCode}
+              onChange={handleCustomerChange}
+            />
+          </Grid>
+          <Grid item xs={12} md={6}>
+            <TextField
+              name="country"
+              label="Country"
+              fullWidth
+              value={customerData.country}
+              onChange={handleCustomerChange}
+            />
+          </Grid>
+          <Grid item xs={12}>
+            <TextField
+              name="notes"
+              label="Notes"
+              multiline
+              rows={3}
+              fullWidth
+              value={customerData.notes}
+              onChange={handleCustomerChange}
+            />
+          </Grid>
+        </Grid>
+      </Paper>
+    );
   };
 
   return (
@@ -203,29 +533,14 @@ const Profile = () => {
               src={avatarPreview || (user?.avatar || '')}
               sx={{ width: 100, height: 100 }}
             >
-              {profileData.name.charAt(0)}
+              {profileData.firstName ? profileData.firstName.charAt(0) : ''}
             </Avatar>
-            <input
-              accept="image/*"
-              style={{ display: 'none' }}
-              id="avatar-upload"
-              type="file"
-              onChange={handleAvatarChange}
-            />
-            <label htmlFor="avatar-upload">
-              <Button
-                component="span"
-                startIcon={<EditIcon />}
-                size="small"
-                sx={{ mt: 1 }}
-              >
-                Change
-              </Button>
-            </label>
           </Grid>
           <Grid item xs>
             <Typography variant="h5" component="h1" fontWeight="bold">
-              {profileData.name || 'User Name'}
+              {profileData.firstName && profileData.lastName 
+                ? `${profileData.firstName} ${profileData.lastName}` 
+                : 'User Name'}
             </Typography>
             <Typography variant="body1" color="text.secondary">
               {profileData.email || 'email@example.com'}
@@ -256,7 +571,6 @@ const Profile = () => {
         >
           <Tab label="Profile" icon={<PersonIcon />} iconPosition="start" />
           <Tab label="Password" icon={<SecurityIcon />} iconPosition="start" />
-          <Tab label="Notifications" icon={<NotificationsIcon />} iconPosition="start" />
           <Tab label="Login History" icon={<HistoryIcon />} iconPosition="start" />
         </Tabs>
       </Paper>
@@ -274,84 +588,99 @@ const Profile = () => {
       )}
 
       {activeTab === 0 && (
-        <Paper sx={{ p: 3 }}>
-          <Typography variant="h6" gutterBottom>
-            Personal Information
-          </Typography>
-          <Divider sx={{ mb: 3 }} />
+        <>
+          <Paper sx={{ p: 3 }}>
+            <Typography variant="h6" gutterBottom>
+              Personal Information
+            </Typography>
+            <Divider sx={{ mb: 3 }} />
 
-          <Grid container spacing={3}>
-            <Grid item xs={12} md={6}>
-              <TextField
-                name="name"
-                label="Name"
-                fullWidth
-                value={profileData.name}
-                onChange={handleProfileChange}
-              />
+            <Grid container spacing={3}>
+              <Grid item xs={12} md={6}>
+                <TextField
+                  name="firstName"
+                  label="First Name"
+                  fullWidth
+                  value={profileData.firstName}
+                  onChange={handleProfileChange}
+                />
+              </Grid>
+              <Grid item xs={12} md={6}>
+                <TextField
+                  name="lastName"
+                  label="Last Name"
+                  fullWidth
+                  value={profileData.lastName}
+                  onChange={handleProfileChange}
+                />
+              </Grid>
+              <Grid item xs={12} md={6}>
+                <TextField
+                  name="email"
+                  label="Email"
+                  type="email"
+                  fullWidth
+                  value={profileData.email}
+                  onChange={handleProfileChange}
+                />
+              </Grid>
+              <Grid item xs={12} md={6}>
+                <TextField
+                  name="phone"
+                  label="Phone"
+                  fullWidth
+                  value={profileData.phone}
+                  onChange={handleProfileChange}
+                />
+              </Grid>
+              <Grid item xs={12} md={6}>
+                <TextField
+                  name="position"
+                  label="Position"
+                  fullWidth
+                  value={profileData.position}
+                  onChange={handleProfileChange}
+                />
+              </Grid>
+              <Grid item xs={12} md={6}>
+                <TextField
+                  name="department"
+                  label="Department"
+                  fullWidth
+                  value={profileData.department}
+                  onChange={handleProfileChange}
+                />
+              </Grid>
+              <Grid item xs={12}>
+                <TextField
+                  name="bio"
+                  label="About Me"
+                  multiline
+                  rows={4}
+                  fullWidth
+                  value={profileData.bio}
+                  onChange={handleProfileChange}
+                />
+              </Grid>
             </Grid>
-            <Grid item xs={12} md={6}>
-              <TextField
-                name="email"
-                label="Email"
-                type="email"
-                fullWidth
-                value={profileData.email}
-                onChange={handleProfileChange}
-              />
-            </Grid>
-            <Grid item xs={12} md={6}>
-              <TextField
-                name="phone"
-                label="Phone"
-                fullWidth
-                value={profileData.phone}
-                onChange={handleProfileChange}
-              />
-            </Grid>
-            <Grid item xs={12} md={6}>
-              <TextField
-                name="position"
-                label="Position"
-                fullWidth
-                value={profileData.position}
-                onChange={handleProfileChange}
-              />
-            </Grid>
-            <Grid item xs={12} md={6}>
-              <TextField
-                name="department"
-                label="Department"
-                fullWidth
-                value={profileData.department}
-                onChange={handleProfileChange}
-              />
-            </Grid>
-            <Grid item xs={12}>
-              <TextField
-                name="bio"
-                label="About Me"
-                multiline
-                rows={4}
-                fullWidth
-                value={profileData.bio}
-                onChange={handleProfileChange}
-              />
-            </Grid>
-          </Grid>
 
-          <Box sx={{ mt: 3, display: 'flex', justifyContent: 'flex-end' }}>
-            <Button
-              variant="contained"
-              color="primary"
-              startIcon={<SaveIcon />}
-              onClick={handleSaveProfile}
-              disabled={loading}
-            >
-              {loading ? <CircularProgress size={24} /> : 'Save'}
-            </Button>
-          </Box>
-        </Paper>
+            <Box sx={{ mt: 3, display: 'flex', justifyContent: 'flex-end' }}>
+              <Button
+                variant="contained"
+                color="primary"
+                startIcon={<SaveIcon />}
+                onClick={handleSaveProfile}
+                disabled={loading}
+              >
+                {loading ? <CircularProgress size={24} /> : 'Save'}
+              </Button>
+            </Box>
+          </Paper>
+          
+          {/* Render supplier or customer details if they exist */}
+          {renderSupplierDetails()}
+          {renderCustomerDetails()}
+        </>
       )}
 
       {activeTab === 1 && (
@@ -414,106 +743,6 @@ const Profile = () => {
         </Paper>
       )}
 
-      {activeTab === 2 && (
-        <Paper sx={{ p: 3 }}>
-          <Typography variant="h6" gutterBottom>
-            Notification Preferences
-          </Typography>
-          <Divider sx={{ mb: 3 }} />
-
-          <Grid container spacing={2}>
-            <Grid item xs={12}>
-              <FormControlLabel
-                control={
-                  <Switch
-                    name="emailNotifications"
-                    checked={notificationPreferences.emailNotifications}
-                    onChange={handleNotificationChange}
-                  />
-                }
-                label="Email Notifications"
-              />
-            </Grid>
-            <Grid item xs={12}>
-              <FormControlLabel
-                control={
-                  <Switch
-                    name="browserNotifications"
-                    checked={notificationPreferences.browserNotifications}
-                    onChange={handleNotificationChange}
-                  />
-                }
-                label="Browser Notifications"
-              />
-            </Grid>
-            <Grid item xs={12}>
-              <Typography variant="subtitle2" gutterBottom sx={{ mt: 2 }}>
-                Notification Types
-              </Typography>
-            </Grid>
-            <Grid item xs={12}>
-              <FormControlLabel
-                control={
-                  <Switch
-                    name="orderUpdates"
-                    checked={notificationPreferences.orderUpdates}
-                    onChange={handleNotificationChange}
-                  />
-                }
-                label="Order Updates"
-              />
-            </Grid>
-            <Grid item xs={12}>
-              <FormControlLabel
-                control={
-                  <Switch
-                    name="stockAlerts"
-                    checked={notificationPreferences.stockAlerts}
-                    onChange={handleNotificationChange}
-                  />
-                }
-                label="Stock Alerts"
-              />
-            </Grid>
-            <Grid item xs={12}>
-              <FormControlLabel
-                control={
-                  <Switch
-                    name="securityAlerts"
-                    checked={notificationPreferences.securityAlerts}
-                    onChange={handleNotificationChange}
-                  />
-                }
-                label="Security Alerts"
-              />
-            </Grid>
-            <Grid item xs={12}>
-              <FormControlLabel
-                control={
-                  <Switch
-                    name="marketingEmails"
-                    checked={notificationPreferences.marketingEmails}
-                    onChange={handleNotificationChange}
-                  />
-                }
-                label="Marketing Emails"
-              />
-            </Grid>
-          </Grid>
-
-          <Box sx={{ mt: 3, display: 'flex', justifyContent: 'flex-end' }}>
-            <Button
-              variant="contained"
-              color="primary"
-              startIcon={<SaveIcon />}
-              onClick={handleSaveNotifications}
-              disabled={loading}
-            >
-              {loading ? <CircularProgress size={24} /> : 'Save'}
-            </Button>
-          </Box>
-        </Paper>
-      )}
 
       {activeTab === 3 && (
         <Paper sx={{ p: 3 }}>

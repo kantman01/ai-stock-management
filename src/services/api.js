@@ -1,9 +1,9 @@
 import axios from 'axios';
 
 const api = axios.create({
-  baseURL: 'http://localhost:5001/api',
+  baseURL: process.env.REACT_APP_API_URL || 'http://localhost:5001/api',
   headers: {
-    'Content-Type': 'application/json',
+    'Content-Type': 'application/json'
   }
 });
 
@@ -58,12 +58,12 @@ api.interceptors.response.use(
 
 const authService = {
 
-  login: async (email, password) => {
+  login: async (email, password, userType = 'staff') => {
     try {
-      const response = await api.post('/auth/login', { email, password });
+      const response = await api.post('/auth/login', { email, password, userType });
       return response.data;
     } catch (error) {
-      throw error.response?.data || { message: 'Giriş işlemi başarısız oldu' };
+      throw error.response?.data || { message: 'Login failed' };
     }
   },
 
@@ -73,6 +73,15 @@ const authService = {
       return response.data;
     } catch (error) {
       throw error.response?.data || { message: 'Kullanıcı bilgileri alınamadı' };
+    }
+  },
+
+  getUserPermissions: async (userId) => {
+    try {
+      const response = await api.get(`/users/${userId}/permissions`);
+      return response.data;
+    } catch (error) {
+      throw error.response?.data || { message: 'Failed to fetch permissions' };
     }
   },
 
@@ -143,7 +152,7 @@ const userService = {
 
   updateUser: async (id, userData) => {
     try {
-      const response = await api.put(`/users/${id}`, userData);
+      const response = await api.put(`/users/profile/${id}`, userData);
       return response.data;
     } catch (error) {
       throw error.response?.data || { message: 'Kullanıcı güncelleme başarısız oldu' };
@@ -170,7 +179,7 @@ const userService = {
 
   updateProfile: async (profileData) => {
     try {
-      const response = await api.put('/users/profile', profileData);
+      const response = await api.put('/users/me', profileData);
       return response.data;
     } catch (error) {
       throw error.response?.data || { message: 'Profile update failed' };
@@ -188,6 +197,14 @@ const apiServices = {
     create: (productData) => api.post('/products', productData),
     update: (id, productData) => api.put(`/products/${id}`, productData),
     delete: (id) => api.delete(`/products/${id}`),
+    uploadImage: (formData, onUploadProgress) => {
+      return api.post('/products/upload-image', formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data'
+        },
+        onUploadProgress
+      });
+    }
   },
 
   categories: {
@@ -237,20 +254,47 @@ const apiServices = {
   },
 
   aiAnalytics: {
-    getStockPredictions: () => api.get('/ai/stock-predictions'),
+    getStockPredictions: (params) => api.get('/ai/stock-predictions', { params }),
+    applyStockPredictions: (predictions, predictionId) => api.post('/ai/stock-predictions/apply', { 
+      predictions, 
+      predictionId 
+    }),
     getSalesForecasts: (params) => api.get('/ai/sales-forecasts', { params }),
-    getRecommendations: () => api.get('/ai/recommendations'),
+    getRecommendations: (params) => api.get('/ai/recommendations', { params }),
+    processOrder: (orderId) => api.post(`/ai/orders/${orderId}/analyze`),
+    runInventoryAnalysis: () => api.post('/ai/inventory/analyze'),
+    getRecentActions: (limit) => api.get('/ai/actions', { params: { limit } }),
+    getActions: (params) => api.get('/ai/actions', { params }),
+    getInteractions: (params) => api.get('/ai/interactions', { params }),
+    getLatestAnalytics: () => api.get('/ai/latest-analytics')
+  },
+
+  notifications: {
+    getAll: () => api.get('/notifications'),
+    create: (data) => api.post('/notifications', data),
+    markAsRead: (id) => api.put(`/notifications/${id}/read`),
+    markAllAsRead: () => api.put('/notifications/read-all'),
+    delete: (id) => api.delete(`/notifications/${id}`)
   },
 
   supplierOrders: {
     getAll: (params) => api.get('/supplier-orders', { params }),
     getById: (id) => api.get(`/supplier-orders/${id}`),
     create: (data) => api.post('/supplier-orders', data),
-    updateStatus: (id, status) => api.patch(`/supplier-orders/${id}/status`, { status }),
-    complete: (id) => api.patch(`/supplier-orders/${id}/complete`),
+    update: (id, data) => api.put(`/supplier-orders/${id}`, data),
+    updateStatus: (id, status) => api.put(`/supplier-orders/${id}/status`, { status }),
+    complete: (id) => api.post(`/supplier-orders/${id}/complete`),
     delete: (id) => api.delete(`/supplier-orders/${id}`)
   },
-};
 
+  dashboard: {
+    getStats: () => api.get('/dashboard/stats'),
+    getSales: () => api.get('/dashboard/sales'),
+    getActivities: () => api.get('/dashboard/activities'),
+    getSupplierStats: (params) => api.get('/dashboard/supplier-stats', { params }),
+    getCustomerStats: (params) => api.get('/dashboard/customer-stats', { params })
+  },
+};
+ 
 export { api, authService, userService, apiServices };
 export default api; 

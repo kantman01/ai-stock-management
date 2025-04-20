@@ -1,4 +1,5 @@
 const { query } = require('../config/db');
+const triggerNotifications = require('../utils/triggerNotifications');
 
 /**
  * Get all stock movements with optional filtering
@@ -180,6 +181,24 @@ exports.createStockMovement = async (req, res) => {
         'UPDATE products SET stock_quantity = $1, updated_at = NOW() WHERE id = $2',
         [newQuantity, product_id]
       );
+
+      
+      if (['sale', 'return_to_supplier', 'waste', 'adjustment'].includes(type)) {
+        
+        const stockCheckSql = `
+          SELECT p.id, p.name, p.sku, p.stock_quantity, p.min_stock_quantity
+          FROM products p
+          WHERE p.id = $1 AND p.stock_quantity <= p.min_stock_quantity
+        `;
+        
+        const stockCheckResult = await query(stockCheckSql, [product_id]);
+        
+        
+        if (stockCheckResult.rows.length > 0) {
+          const product = stockCheckResult.rows[0];
+          await triggerNotifications.lowStockNotification(product);
+        }
+      }
 
       await query('COMMIT');
 

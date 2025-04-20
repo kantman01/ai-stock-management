@@ -24,7 +24,8 @@ const AuthChecker = ({ children }) => {
     }
   }, [dispatch]);
 
-  if (isLoading && !isPublicRoute) {
+  
+  if (!isPublicRoute && isLoading) {
     return (
       <Box
         sx={{

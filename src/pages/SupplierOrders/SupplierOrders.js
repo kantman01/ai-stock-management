@@ -49,7 +49,10 @@ import {
   Print as PrintIcon,
   AddShoppingCart as AddItemIcon,
   RemoveShoppingCart as RemoveItemIcon,
-  LocalShipping
+  LocalShipping,
+  Science as ScienceIcon,
+  ThumbUp as ApproveIcon,
+  Done as DeliveredIcon
 } from '@mui/icons-material';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
@@ -59,6 +62,7 @@ import { useSelector } from 'react-redux';
 import { hasPermission } from '../../utils/roles';
 import { PERMISSIONS } from '../../utils/roles';
 import { apiServices } from '../../services/api';
+import { supplierOrderApiUtils } from '../../utils/apiUtils';
 
 const SUPPLIER_ORDER_STATUS = {
   PENDING: 'pending',
@@ -81,6 +85,7 @@ const SUPPLIER_ORDER_STATUS_LABELS = {
 const SupplierOrders = () => {
   const { user } = useSelector(state => state.auth);
   const canManageInventory = hasPermission(user?.role, PERMISSIONS.MANAGE_INVENTORY);
+  const isSupplier = user?.role?.code === 'supplier';
 
   const [supplierOrders, setSupplierOrders] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -111,6 +116,19 @@ const SupplierOrders = () => {
     itemsValid: false
   });
 
+  
+  const [filteredProducts, setFilteredProducts] = useState([]);
+
+  
+  useEffect(() => {
+    if (selectedSupplier) {
+      const filtered = products.filter(product => product.supplier_id === selectedSupplier.id);
+      setFilteredProducts(filtered);
+    } else {
+      setFilteredProducts([]);
+    }
+  }, [selectedSupplier, products]);
+
   useEffect(() => {
     fetchSupplierOrders();
   }, [page, rowsPerPage, filters]);
@@ -118,8 +136,7 @@ const SupplierOrders = () => {
   const fetchSupplierOrders = async () => {
     setLoading(true);
     try {
-
-      const params = {
+      const baseParams = {
         limit: rowsPerPage,
         offset: page * rowsPerPage,
         search: filters.search || undefined,
@@ -127,6 +144,9 @@ const SupplierOrders = () => {
         start_date: filters.startDate ? dayjs(filters.startDate).format('YYYY-MM-DD') : undefined,
         end_date: filters.endDate ? dayjs(filters.endDate).format('YYYY-MM-DD') : undefined
       };
+
+      
+      const params = supplierOrderApiUtils.getListParams(baseParams);
 
       const response = await apiServices.supplierOrders.getAll(params);
 
@@ -160,7 +180,9 @@ const SupplierOrders = () => {
 
       const fetchProducts = async () => {
         try {
+          
           const response = await apiServices.products.getAll();
+          console.log("products",response.data.data);
           setProducts(response.data.data || []);
         } catch (error) {
           console.error('Error fetching products:', error);
@@ -183,6 +205,17 @@ const SupplierOrders = () => {
       itemsValid: orderItems.length > 0
     });
   }, [selectedSupplier, orderItems]);
+
+  
+  useEffect(() => {
+    if (selectedSupplier && filteredProducts.length === 0) {
+      setSnackbar({
+        open: true,
+        message: `No products available from ${selectedSupplier.name}. Please select a different supplier.`,
+        severity: 'warning'
+      });
+    }
+  }, [selectedSupplier, filteredProducts]);
 
   const handleChangePage = (event, newPage) => {
     setPage(newPage);
@@ -235,53 +268,67 @@ const SupplierOrders = () => {
     try {
       setLoading(true);
 
-      if (newStatus === SUPPLIER_ORDER_STATUS.COMPLETED) {
-
-        const orderCheck = await apiServices.supplierOrders.getById(orderId);
-        if (orderCheck.data.status !== SUPPLIER_ORDER_STATUS.DELIVERED) {
-          setSnackbar({
-            open: true,
-            message: 'Order must be in delivered status before it can be completed.',
-            severity: 'error'
-          });
-          return;
-        }
-
-        await apiServices.supplierOrders.complete(orderId);
-
+      
+      if (!isValidStatusTransition(orderId, newStatus)) {
         setSnackbar({
           open: true,
-          message: `Order completed and items added to inventory`,
-          severity: 'success'
+          message: `Invalid status transition to "${newStatus}"`,
+          severity: 'error'
         });
-      } else {
-
-        await apiServices.supplierOrders.updateStatus(orderId, newStatus);
-
-        setSnackbar({
-          open: true,
-          message: `Order status updated to ${SUPPLIER_ORDER_STATUS_LABELS[newStatus]}`,
-          severity: 'success'
-        });
+        return;
       }
 
+      
+      if (isSupplier) {
+        await apiServices.supplierOrders.updateStatus(orderId, newStatus);
+      } else {
+        await apiServices.supplierOrders.updateStatus(orderId, newStatus);
+      }
+
+      setSnackbar({
+        open: true,
+        message: `Order status updated to ${SUPPLIER_ORDER_STATUS_LABELS[newStatus]}`,
+        severity: 'success'
+      });
+
+      
       fetchSupplierOrders();
 
+      
       if (selectedOrder && selectedOrder.id === orderId) {
-        const updatedOrder = await apiServices.supplierOrders.getById(orderId);
-        setSelectedOrder(updatedOrder.data);
+        const response = await apiServices.supplierOrders.getById(orderId);
+        setSelectedOrder(response.data);
       }
-
     } catch (error) {
       console.error('Error updating order status:', error);
       setSnackbar({
         open: true,
-        message: 'Error updating order status: ' + (error.response?.data?.message || error.message || 'Unknown error'),
+        message: 'Error updating order status: ' + (error.message || 'Unknown error'),
         severity: 'error'
       });
     } finally {
       setLoading(false);
     }
+  };
+
+  
+  const isValidStatusTransition = (orderId, newStatus) => {
+    const order = supplierOrders.find(o => o.id === orderId);
+    if (!order) return false;
+
+    const currentStatus = order.status.toLowerCase();
+    
+    
+    const allowedTransitions = {
+      [SUPPLIER_ORDER_STATUS.PENDING]: [SUPPLIER_ORDER_STATUS.APPROVED, SUPPLIER_ORDER_STATUS.CANCELLED],
+      [SUPPLIER_ORDER_STATUS.APPROVED]: [SUPPLIER_ORDER_STATUS.SHIPPED, SUPPLIER_ORDER_STATUS.CANCELLED],
+      [SUPPLIER_ORDER_STATUS.SHIPPED]: [SUPPLIER_ORDER_STATUS.DELIVERED, SUPPLIER_ORDER_STATUS.CANCELLED],
+      [SUPPLIER_ORDER_STATUS.DELIVERED]: [SUPPLIER_ORDER_STATUS.COMPLETED],
+      [SUPPLIER_ORDER_STATUS.COMPLETED]: [],
+      [SUPPLIER_ORDER_STATUS.CANCELLED]: []
+    };
+
+    return allowedTransitions[currentStatus]?.includes(newStatus);
   };
 
   const handleCancelOrder = async (orderId) => {
@@ -349,64 +396,87 @@ const SupplierOrders = () => {
     );
   };
 
-  const getStatusActions = (order) => {
-    if (!canManageInventory) return null;
-
+  
+  const getActionButtons = (order) => {
     const { id, status } = order;
-
-    switch (status) {
-      case SUPPLIER_ORDER_STATUS.PENDING:
-        return (
-          <Stack direction="row" spacing={1}>
-            <Tooltip title="Approve">
+    const normalizedStatus = status.toLowerCase();
+    
+    
+    if (isSupplier) {
+      switch (normalizedStatus) {
+        case SUPPLIER_ORDER_STATUS.PENDING:
+          return (
+            <Tooltip title="Approve Order">
               <IconButton
-                color="success"
                 size="small"
+                color="primary"
                 onClick={() => handleUpdateOrderStatus(id, SUPPLIER_ORDER_STATUS.APPROVED)}
               >
-                <CheckIcon />
+                <ApproveIcon />
               </IconButton>
             </Tooltip>
-            <Tooltip title="Cancel">
+          );
+        case SUPPLIER_ORDER_STATUS.APPROVED:
+          return (
+            <Tooltip title="Mark as Shipped">
               <IconButton
-                color="error"
                 size="small"
-                onClick={() => handleCancelOrder(id)}
+                color="primary"
+                onClick={() => handleUpdateOrderStatus(id, SUPPLIER_ORDER_STATUS.SHIPPED)}
               >
-                <CancelIcon />
+                <ShippingIcon />
               </IconButton>
             </Tooltip>
-          </Stack>
-        );
-
-      case SUPPLIER_ORDER_STATUS.APPROVED:
-        return (
-          <Tooltip title="Mark as Shipped">
+          );
+          /*
+        case SUPPLIER_ORDER_STATUS.SHIPPED:
+          return (
+            <Tooltip title="Mark as Delivered">
+              <IconButton
+                size="small"
+                color="primary"
+                onClick={() => handleUpdateOrderStatus(id, SUPPLIER_ORDER_STATUS.DELIVERED)}
+              >
+                <DeliveredIcon />
+              </IconButton>
+            </Tooltip>
+          );
+          */
+        default:
+          return null;
+      }
+    }
+    
+    
+    if (normalizedStatus === SUPPLIER_ORDER_STATUS.PENDING) {
+      return (
+        <Stack direction="row" spacing={1}>
+          <Tooltip title="Cancel">
             <IconButton
-              color="primary"
+              color="error"
               size="small"
-              onClick={() => handleUpdateOrderStatus(id, SUPPLIER_ORDER_STATUS.SHIPPED)}
+              onClick={() => handleCancelOrder(id)}
             >
-              <ShippingIcon />
+              <CancelIcon />
             </IconButton>
           </Tooltip>
-        );
-
-      case SUPPLIER_ORDER_STATUS.SHIPPED:
-        return (
-          <Tooltip title="Mark as Delivered">
-            <IconButton
-              color="secondary"
-              size="small"
-              onClick={() => handleUpdateOrderStatus(id, SUPPLIER_ORDER_STATUS.DELIVERED)}
-            >
-              <ShippingIcon />
-            </IconButton>
-          </Tooltip>
-        );
-
-      case SUPPLIER_ORDER_STATUS.DELIVERED:
-        return (
+        </Stack>
+      );
+    } else if (normalizedStatus === SUPPLIER_ORDER_STATUS.APPROVED || normalizedStatus === SUPPLIER_ORDER_STATUS.SHIPPED) {
+      return (
+        <Tooltip title="Cancel">
+          <IconButton
+            color="error"
+            size="small"
+            onClick={() => handleCancelOrder(id)}
+          >
+            <CancelIcon />
+          </IconButton>
+        </Tooltip>
+      );
+    } else if (normalizedStatus === SUPPLIER_ORDER_STATUS.DELIVERED) {
+      return (
+        <Stack direction="row" spacing={1}>
           <Tooltip title="Complete & Add to Inventory">
             <IconButton
               color="success"
@@ -416,11 +486,20 @@ const SupplierOrders = () => {
               <CheckIcon />
             </IconButton>
           </Tooltip>
-        );
-
-      default:
-        return null;
+          <Tooltip title="Cancel">
+            <IconButton
+              color="error"
+              size="small"
+              onClick={() => handleCancelOrder(id)}
+            >
+              <CancelIcon />
+            </IconButton>
+          </Tooltip>
+        </Stack>
+      );
     }
+    
+    return null;
   };
 
   const handleOpenNewOrderDialog = () => {
@@ -434,6 +513,16 @@ const SupplierOrders = () => {
   };
 
   const handleSupplierChange = (event, newValue) => {
+    
+    if (orderItems.length > 0) {
+      setSnackbar({
+        open: true,
+        message: 'Cannot change supplier once products are added. Please clear your cart first.',
+        severity: 'warning'
+      });
+      return;
+    }
+    
     setSelectedSupplier(newValue);
   };
 
@@ -525,21 +614,46 @@ const SupplierOrders = () => {
     setSnackbar({ ...snackbar, open: false });
   };
 
+  const getPageTitle = () => {
+    if (isSupplier) {
+      return "My Orders";
+    }
+    return "Supplier Orders Management";
+  };
+
+  const getPageSubtitle = () => {
+    if (isSupplier) {
+      return "View and manage orders assigned to you";
+    }
+    return "Create, cancel, or complete delivered orders";
+  };
+
+  
+  const handleClearCart = () => {
+    setOrderItems([]);
+  };
+
   return (
     <Box sx={{ p: 3 }}>
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-        <Typography variant="h5" component="h1" fontWeight="bold">
-          Supplier Orders
-        </Typography>
-
-        {canManageInventory && (
+      {/* Buttons and Filters */}
+      <Box sx={{ display: 'flex', flexDirection: { xs: 'column', md: 'row' }, gap: 2, mb: 3, alignItems: { md: 'center' }, justifyContent: 'space-between' }}>
+        <Box>
+          <Typography variant="h4" component="h1" gutterBottom>
+            {getPageTitle()}
+          </Typography>
+          <Typography variant="subtitle1" color="text.secondary">
+            {getPageSubtitle()}
+          </Typography>
+        </Box>
+        {!isSupplier && (
           <Button
             variant="contained"
             color="primary"
             startIcon={<AddIcon />}
             onClick={handleOpenNewOrderDialog}
+            sx={{ height: 'fit-content' }}
           >
-            New Purchase Order
+            New Order
           </Button>
         )}
       </Box>
@@ -623,6 +737,7 @@ const SupplierOrders = () => {
                   <TableCell align="right">Total Amount</TableCell>
                   <TableCell align="center">Items Count</TableCell>
                   <TableCell>Order Date</TableCell>
+                  <TableCell>Created By</TableCell>
                   <TableCell align="right">Actions</TableCell>
                 </TableRow>
               </TableHead>
@@ -639,6 +754,18 @@ const SupplierOrders = () => {
                     </TableCell>
                     <TableCell align="center">{order.item_count}</TableCell>
                     <TableCell>{dayjs(order.created_at).format('MM/DD/YYYY HH:mm')}</TableCell>
+                    <TableCell>
+                      {order.is_ai_created ? (
+                        <Chip 
+                          label="AI System" 
+                          size="small" 
+                          color="primary" 
+                          icon={<ScienceIcon fontSize="small" />} 
+                        />
+                      ) : (
+                        order.created_by_name || 'System'
+                      )}
+                    </TableCell>
                     <TableCell align="right">
                       <Stack direction="row" spacing={1} justifyContent="flex-end">
                         <Tooltip title="Details">
@@ -650,14 +777,14 @@ const SupplierOrders = () => {
                             <ViewIcon />
                           </IconButton>
                         </Tooltip>
-                        {getStatusActions(order)}
+                        {getActionButtons(order)}
                       </Stack>
                     </TableCell>
                   </TableRow>
                 ))}
                 {supplierOrders.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={7} align="center">
+                    <TableCell colSpan={8} align="center">
                       No supplier orders found.
                     </TableCell>
                   </TableRow>
@@ -727,50 +854,71 @@ const SupplierOrders = () => {
                         {dayjs(selectedOrder.created_at).format('MM/DD/YYYY HH:mm')}
                       </Typography>
                     </Grid>
+                    <Grid item xs={12}>
+                      <Typography variant="body2" color="text.secondary">
+                        Created By
+                      </Typography>
+                      <Typography variant="body1">
+                        {selectedOrder.is_ai_created ? (
+                          <Box sx={{ display: 'flex', alignItems: 'center', mt: 0.5 }}>
+                            <ScienceIcon fontSize="small" color="primary" sx={{ mr: 0.5 }} />
+                            <span>AI System (Automated Order)</span>
+                          </Box>
+                        ) : (
+                          selectedOrder.created_by_name || 'System'
+                        )}
+                      </Typography>
+                    </Grid>
                   </Grid>
                 </Box>
               </Grid>
 
               <Grid item xs={12}>
                 <Divider sx={{ my: 2 }} />
-                <Typography variant="subtitle2" color="text.secondary">
-                  Order Items
-                </Typography>
-                <TableContainer component={Paper} variant="outlined" sx={{ mt: 1 }}>
-                  <Table size="small">
-                    <TableHead>
-                      <TableRow>
-                        <TableCell>Product</TableCell>
-                        <TableCell align="center">Quantity</TableCell>
-                        <TableCell align="right">Unit Price</TableCell>
-                        <TableCell align="right">Total</TableCell>
-                      </TableRow>
-                    </TableHead>
-                    <TableBody>
-                      {selectedOrder.items && selectedOrder.items.map((item) => (
-                        <TableRow key={item.id}>
-                          <TableCell>{item.product_name}</TableCell>
-                          <TableCell align="center">{item.quantity}</TableCell>
-                          <TableCell align="right">
-                            ${parseFloat(item.unit_price).toFixed(2)}
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+                  <Typography variant="subtitle1">
+                    Order Items {selectedSupplier && `(${selectedSupplier.name})`}
+                  </Typography>
+                </Box>
+                {selectedOrder.items.length === 0 ? (
+                  <Alert severity="info">No items added to order yet</Alert>
+                ) : (
+                  <TableContainer component={Paper} variant="outlined" sx={{ mt: 1 }}>
+                    <Table size="small">
+                      <TableHead>
+                        <TableRow>
+                          <TableCell>Product</TableCell>
+                          <TableCell align="center">Quantity</TableCell>
+                          <TableCell align="right">Unit Price</TableCell>
+                          <TableCell align="right">Total</TableCell>
+                        </TableRow>
+                      </TableHead>
+                      <TableBody>
+                        {selectedOrder.items && selectedOrder.items.map((item) => (
+                          <TableRow key={item.id}>
+                            <TableCell>{item.product_name}</TableCell>
+                            <TableCell align="center">{item.quantity}</TableCell>
+                            <TableCell align="right">
+                              ${parseFloat(item.unit_price).toFixed(2)}
+                            </TableCell>
+                            <TableCell align="right">
+                              ${parseFloat(item.total_price).toFixed(2)}
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                        <TableRow>
+                          <TableCell colSpan={2} />
+                          <TableCell align="right" sx={{ fontWeight: 'bold' }}>
+                            Total
                           </TableCell>
-                          <TableCell align="right">
-                            ${parseFloat(item.total_price).toFixed(2)}
+                          <TableCell align="right" sx={{ fontWeight: 'bold' }}>
+                            ${parseFloat(selectedOrder.total_amount).toFixed(2)}
                           </TableCell>
                         </TableRow>
-                      ))}
-                      <TableRow>
-                        <TableCell colSpan={2} />
-                        <TableCell align="right" sx={{ fontWeight: 'bold' }}>
-                          Total
-                        </TableCell>
-                        <TableCell align="right" sx={{ fontWeight: 'bold' }}>
-                          ${parseFloat(selectedOrder.total_amount).toFixed(2)}
-                        </TableCell>
-                      </TableRow>
-                    </TableBody>
-                  </Table>
-                </TableContainer>
+                      </TableBody>
+                    </Table>
+                  </TableContainer>
+                )}
               </Grid>
 
               {selectedOrder.notes && (
@@ -786,62 +934,86 @@ const SupplierOrders = () => {
             </Grid>
           </DialogContent>
           <DialogActions>
-            {canManageInventory && (
+            {/* Add supplier action buttons in the dialog */}
+            {isSupplier && selectedOrder.status && (
               <>
-                {selectedOrder.status === SUPPLIER_ORDER_STATUS.PENDING && (
+                {selectedOrder.status.toLowerCase() === SUPPLIER_ORDER_STATUS.PENDING && (
+                  <Button
+                    variant="contained" 
+                    color="primary"
+                    startIcon={<ApproveIcon />}
+                    onClick={() => handleUpdateOrderStatus(selectedOrder.id, SUPPLIER_ORDER_STATUS.APPROVED)}
+                  >
+                    Approve Order
+                  </Button>
+                )}
+                {selectedOrder.status.toLowerCase() === SUPPLIER_ORDER_STATUS.APPROVED && (
+                  <Button
+                    variant="contained"
+                    color="primary"
+                    startIcon={<ShippingIcon />}
+                    onClick={() => handleUpdateOrderStatus(selectedOrder.id, SUPPLIER_ORDER_STATUS.SHIPPED)}
+                  >
+                    Mark as Shipped
+                  </Button>
+                )}
+                {/*
+                {selectedOrder.status.toLowerCase() === SUPPLIER_ORDER_STATUS.SHIPPED && (
+                  <Button
+                    variant="contained"
+                    color="primary"
+                    startIcon={<DeliveredIcon />}
+                    onClick={() => handleUpdateOrderStatus(selectedOrder.id, SUPPLIER_ORDER_STATUS.DELIVERED)}
+                  >
+                    Mark as Delivered
+                  </Button>
+                )}
+                */}
+              </>
+            )}
+            
+            {/* Existing staff buttons */}
+            {canManageInventory && !isSupplier && (
+              <>
+                {selectedOrder.status && selectedOrder.status.toLowerCase() === SUPPLIER_ORDER_STATUS.PENDING && (
+                  <Button
+                    onClick={() => handleCancelOrder(selectedOrder.id)}
+                    color="error"
+                  >
+                    Cancel
+                  </Button>
+                )}
+                {selectedOrder.status && selectedOrder.status.toLowerCase() === SUPPLIER_ORDER_STATUS.APPROVED && (
+                  <Button
+                    onClick={() => handleCancelOrder(selectedOrder.id)}
+                    color="error"
+                  >
+                    Cancel
+                  </Button>
+                )}
+                {selectedOrder.status && selectedOrder.status.toLowerCase() === SUPPLIER_ORDER_STATUS.SHIPPED && (
+                  <Button
+                    onClick={() => handleCancelOrder(selectedOrder.id)}
+                    color="error"
+                  >
+                    Cancel
+                  </Button>
+                )}
+                {selectedOrder.status && selectedOrder.status.toLowerCase() === SUPPLIER_ORDER_STATUS.DELIVERED && (
                   <>
                     <Button
-                      onClick={() => {
-                        handleUpdateOrderStatus(selectedOrder.id, SUPPLIER_ORDER_STATUS.APPROVED);
-                        handleCloseDialog();
-                      }}
+                      onClick={() => handleUpdateOrderStatus(selectedOrder.id, SUPPLIER_ORDER_STATUS.COMPLETED)}
                       color="success"
                     >
-                      Approve
+                      Complete & Add to Inventory
                     </Button>
                     <Button
-                      onClick={() => {
-                        handleCancelOrder(selectedOrder.id);
-                        handleCloseDialog();
-                      }}
+                      onClick={() => handleCancelOrder(selectedOrder.id)}
                       color="error"
                     >
                       Cancel
                     </Button>
                   </>
-                )}
-                {selectedOrder.status === SUPPLIER_ORDER_STATUS.APPROVED && (
-                  <Button
-                    onClick={() => {
-                      handleUpdateOrderStatus(selectedOrder.id, SUPPLIER_ORDER_STATUS.SHIPPED);
-                      handleCloseDialog();
-                    }}
-                    color="primary"
-                  >
-                    Mark as Shipped
-                  </Button>
-                )}
-                {selectedOrder.status === SUPPLIER_ORDER_STATUS.SHIPPED && (
-                  <Button
-                    onClick={() => {
-                      handleUpdateOrderStatus(selectedOrder.id, SUPPLIER_ORDER_STATUS.DELIVERED);
-                      handleCloseDialog();
-                    }}
-                    color="primary"
-                  >
-                    Mark as Delivered
-                  </Button>
-                )}
-                {selectedOrder.status === SUPPLIER_ORDER_STATUS.DELIVERED && (
-                  <Button
-                    onClick={() => {
-                      handleUpdateOrderStatus(selectedOrder.id, SUPPLIER_ORDER_STATUS.COMPLETED);
-                      handleCloseDialog();
-                    }}
-                    color="success"
-                  >
-                    Complete & Add to Inventory
-                  </Button>
                 )}
               </>
             )}
@@ -863,6 +1035,7 @@ const SupplierOrders = () => {
                 getOptionLabel={(option) => option.name}
                 value={selectedSupplier}
                 onChange={handleSupplierChange}
+                disabled={orderItems.length > 0}
                 renderInput={(params) => (
                   <TextField
                     {...params}
@@ -870,6 +1043,7 @@ const SupplierOrders = () => {
                     required
                     variant="outlined"
                     fullWidth
+                    helperText={orderItems.length > 0 ? "Cannot change supplier once products are added" : ""}
                   />
                 )}
               />
@@ -880,28 +1054,54 @@ const SupplierOrders = () => {
               <Typography variant="subtitle1" gutterBottom>
                 Add Products
               </Typography>
-              <Autocomplete
-                id="product-select"
-                options={products}
-                getOptionLabel={(option) => `${option.name} ($${option.price})`}
-                onChange={(event, newValue) => newValue && handleAddProduct(newValue)}
-                renderInput={(params) => (
-                  <TextField
-                    {...params}
-                    label="Search Products"
-                    variant="outlined"
-                    fullWidth
-                  />
-                )}
-                value={null}
-              />
+              {selectedSupplier ? (
+                <>
+                  {filteredProducts.length === 0 ? (
+                    <Alert severity="info" sx={{ mb: 2 }}>
+                      No products available from this supplier. Please select a different supplier.
+                    </Alert>
+                  ) : (
+                    <Autocomplete
+                      id="product-select"
+                      options={filteredProducts}
+                      getOptionLabel={(option) => `${option.name} ($${option.price})`}
+                      onChange={(event, newValue) => newValue && handleAddProduct(newValue)}
+                      renderInput={(params) => (
+                        <TextField
+                          {...params}
+                          label="Search Products"
+                          variant="outlined"
+                          fullWidth
+                        />
+                      )}
+                      value={null}
+                    />
+                  )}
+                </>
+              ) : (
+                <Alert severity="info">
+                  Please select a supplier first to see available products.
+                </Alert>
+              )}
             </Grid>
 
             {/* Order Items List */}
             <Grid item xs={12}>
-              <Typography variant="subtitle1" gutterBottom>
-                Order Items
-              </Typography>
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+                <Typography variant="subtitle1">
+                  Order Items {selectedSupplier && `(${selectedSupplier.name})`}
+                </Typography>
+                {orderItems.length > 0 && (
+                  <Button 
+                    variant="outlined" 
+                    color="error" 
+                    size="small" 
+                    onClick={handleClearCart}
+                  >
+                    Clear All Items
+                  </Button>
+                )}
+              </Box>
               {orderItems.length === 0 ? (
                 <Alert severity="info">No items added to order yet</Alert>
               ) : (
@@ -969,7 +1169,8 @@ const SupplierOrders = () => {
             onClick={handleCreateOrder}
             variant="contained"
             color="primary"
-            disabled={!formValidation.supplierValid || !formValidation.itemsValid}
+            disabled={!formValidation.supplierValid || !formValidation.itemsValid || 
+                    (selectedSupplier && filteredProducts.length === 0)}
           >
             Create Order
           </Button>

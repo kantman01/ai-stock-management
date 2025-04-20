@@ -103,7 +103,7 @@ const mockCustomers = [
 
 const Customers = () => {
   const { user } = useSelector(state => state.auth);
-  const canManageCustomers = hasPermission(user?.role?.code, PERMISSIONS.MANAGE_CUSTOMERS);
+  const canManageCustomers = hasPermission(user, PERMISSIONS.MANAGE_CUSTOMERS);
 
   const [customers, setCustomers] = useState([]);
   const [filteredCustomers, setFilteredCustomers] = useState([]);
@@ -124,7 +124,9 @@ const Customers = () => {
     first_name: '',
     last_name: '',
     email: '',
+    password: '',
     phone: '',
+    company_name: '',
     address: '',
     city: '',
     state: '',
@@ -134,13 +136,9 @@ const Customers = () => {
   });
 
   useEffect(() => {
-
     const fetchCustomers = async () => {
       setLoading(true);
       try {
-
-
-
         await new Promise(resolve => setTimeout(resolve, 800));
         setCustomers(mockCustomers);
         setFilteredCustomers(mockCustomers);
@@ -194,7 +192,9 @@ const Customers = () => {
       first_name: '',
       last_name: '',
       email: '',
+      password: '',
       phone: '',
+      company_name: '',
       address: '',
       city: '',
       state: '',
@@ -211,7 +211,9 @@ const Customers = () => {
       first_name: customer.first_name,
       last_name: customer.last_name,
       email: customer.email,
+      password: '',
       phone: customer.phone,
+      company_name: customer.company_name || '',
       address: customer.address,
       city: customer.city || '',
       state: customer.state || '',
@@ -242,12 +244,49 @@ const Customers = () => {
   };
 
   const validateForm = () => {
-
-    if (!formData.first_name || !formData.last_name) {
-      setError('First name and last name are required.');
-      return false;
+    const errors = {};
+    
+    if (!formData.first_name) errors.first_name = 'First name is required';
+    if (!formData.last_name) errors.last_name = 'Last name is required';
+    
+    if (!formData.email) {
+      errors.email = 'Email is required';
+    } else if (!/\S+@\S+\.\S+/.test(formData.email)) {
+      errors.email = 'Email is invalid';
     }
-    return true;
+    
+    if (!formData.password) {
+      errors.password = 'Password is required for new customer account';
+    } else if (formData.password.length < 8) {
+      errors.password = 'Password must be at least 8 characters';
+    }
+    
+    if (!formData.phone) {
+      errors.phone = 'Phone is required';
+    }
+    
+    if (!formData.address) {
+      errors.address = 'Address is required';
+    }
+    
+    if (!formData.city) {
+      errors.city = 'City is required';
+    }
+    
+    if (!formData.state) {
+      errors.state = 'State/Province is required';
+    }
+    
+    if (!formData.postal_code) {
+      errors.postal_code = 'Postal Code is required';
+    }
+    
+    if (!formData.country) {
+      errors.country = 'Country is required';
+    }
+    
+    setError(Object.keys(errors).length > 0 ? Object.values(errors).join('\n') : null);
+    return Object.keys(errors).length === 0;
   };
 
   const handleSaveCustomer = async () => {
@@ -260,9 +299,6 @@ const Customers = () => {
 
     try {
       if (currentCustomer) {
-
-
-
         const updatedCustomers = customers.map(customer =>
           customer.id === currentCustomer.id ? {
             ...customer,
@@ -272,9 +308,6 @@ const Customers = () => {
 
         setCustomers(updatedCustomers);
       } else {
-
-
-
         const newCustomer = {
           id: Math.max(...customers.map(c => c.id)) + 1,
           ...formData,
@@ -300,8 +333,6 @@ const Customers = () => {
     setError(null);
 
     try {
-
-
       const updatedCustomers = customers.filter(
         customer => customer.id !== currentCustomer.id
       );
@@ -577,6 +608,18 @@ const Customers = () => {
                 value={formData.email}
                 onChange={handleInputChange}
                 required
+              />
+            </Grid>
+            <Grid item xs={12} sm={6}>
+              <TextField
+                fullWidth
+                margin="dense"
+                name="password"
+                label="Password"
+                type="password"
+                value={formData.password}
+                onChange={handleInputChange}
+                required={!currentCustomer}
               />
             </Grid>
             <Grid item xs={12} sm={6}>

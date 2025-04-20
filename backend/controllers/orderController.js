@@ -1,4 +1,6 @@
 const { query } = require('../config/db');
+const triggerNotifications = require('../utils/triggerNotifications');
+const axios = require('axios');
 
 /**
  * Get all orders with optional filtering
@@ -18,6 +20,11 @@ exports.getOrders = async (req, res) => {
       offset = 0
     } = req.query;
 
+    
+    const filterCustomerId = req.user?.role?.code === 'customer' && req.user?.customerId 
+      ? req.user.customerId 
+      : customer_id;
+
     let sql = `
       SELECT o.*, c.first_name || ' ' || c.last_name as customer_name,
       u.first_name || ' ' || u.last_name as created_by_name,
@@ -30,9 +37,9 @@ exports.getOrders = async (req, res) => {
 
     const params = [];
 
-    if (customer_id) {
+    if (filterCustomerId) {
       sql += ` AND o.customer_id = $${params.length + 1}`;
-      params.push(customer_id);
+      params.push(filterCustomerId);
     }
 
     if (status) {
@@ -147,13 +154,16 @@ exports.getOrderById = async (req, res) => {
  */
 exports.createOrder = async (req, res) => {
   try {
-    const {
-      customer_id,
-      items,
-      notes,
-      status = 'pending',
-      payment_status = 'unpaid'
-    } = req.body;
+    let { customer_id, items, notes, status = 'pending', payment_status = 'paid' } = req.body;
+
+    
+    if (req.user?.role?.code === 'customer' && req.user?.customerId) {
+      customer_id = req.user.customerId;
+    }
+
+    if (!customer_id) {
+      return res.status(400).json({ message: 'Customer ID is required' });
+    }
 
     if (!items || !Array.isArray(items) || items.length === 0) {
       return res.status(400).json({ message: 'Order must have at least one item' });
@@ -269,6 +279,20 @@ exports.createOrder = async (req, res) => {
 
       await query('COMMIT');
 
+      
+      try {
+        const customerQuery = `SELECT first_name, last_name FROM customers WHERE id = $1`;
+        const customerResult = await query(customerQuery, [customer_id]);
+        const customerName = customerResult.rows[0] ? 
+          `${customerResult.rows[0].first_name} ${customerResult.rows[0].last_name}` : 
+          'Unknown Customer';
+        
+        await triggerNotifications.newOrderNotification(order, customerName);
+      } catch (notifErr) {
+        console.error('Error creating order notification:', notifErr);
+        
+      }
+
       const { id } = order;
       const getOrderResult = await exports.getOrderById({ params: { id } }, res);
       return getOrderResult;
@@ -301,6 +325,7 @@ exports.updateOrderStatus = async (req, res) => {
       return res.status(404).json({ message: 'Order not found' });
     }
 
+    const previousStatus = checkResult.rows[0].status;
     const updates = [];
     const values = [];
     let paramCount = 1;
@@ -332,8 +357,44 @@ exports.updateOrderStatus = async (req, res) => {
     values.push(id);
 
     const result = await query(sql, values);
+    const updatedOrder = result.rows[0];
 
-    res.json(result.rows[0]);
+    
+    
+    const isNowApproved = status === 'APPROVED' || status === 'approved';
+    const wasNotApproved = previousStatus !== 'APPROVED' && previousStatus !== 'approved';
+    
+    if (isNowApproved && wasNotApproved) {
+      try {
+        console.log(`Order #${id} has been approved - triggering AI analysis`);
+        
+        
+        const aiAnalysisUrl = `${req.protocol}://${req.get('host')}/api/ai/orders/${id}/analyze`;
+        console.log(`Calling AI analysis endpoint: ${aiAnalysisUrl}`);
+        
+        axios.post(aiAnalysisUrl, {}, {
+          headers: {
+            'Authorization': req.headers.authorization
+          }
+        }).then(response => {
+          console.log(`AI analysis for order #${id} completed successfully:`, response.data);
+        }).catch(err => {
+          console.error(`Error in AI order analysis for order #${id}:`, err.message);
+        });
+
+        
+        await triggerNotifications.systemAnnouncementNotification(
+          'AI Order Analysis Initiated',
+          `AI is analyzing order #${id} for potential supplier orders.`,
+          `/orders/${id}`
+        );
+      } catch (aiError) {
+        console.error('Error triggering AI analysis:', aiError);
+        
+      }
+    }
+
+    res.json(updatedOrder);
   } catch (err) {
     console.error('Error updating order status:', err);
     res.status(500).json({ message: 'Error updating order status', error: err.message });
@@ -420,4 +481,44 @@ exports.deleteOrder = async (req, res) => {
     console.error('Error cancelling order:', err);
     res.status(500).json({ message: 'Error cancelling order', error: err.message });
   }
-}; 
+};
+
+/**
+ * Get an order by ID that belongs to a specific customer
+ * This method is used for the customer portal to ensure customers can only access their own orders
+ */
+exports.getOrderByCustomerId = async (orderId, customerId) => {
+  try {
+    const sql = `
+      SELECT 
+        o.*,
+        c.name as customer_name,
+        json_agg(json_build_object(
+          'id', oi.id,
+          'product_id', oi.product_id,
+          'quantity', oi.quantity,
+          'unit_price', oi.unit_price,
+          'total_price', oi.total_price,
+          'product_name', p.name,
+          'product_sku', p.sku
+        )) as items
+      FROM orders o
+      JOIN customers c ON o.customer_id = c.id
+      LEFT JOIN order_items oi ON o.id = oi.order_id
+      LEFT JOIN products p ON oi.product_id = p.id
+      WHERE o.id = $1 AND o.customer_id = $2
+      GROUP BY o.id, c.name
+    `;
+
+    const result = await query(sql, [orderId, customerId]);
+
+    if (result.rows.length === 0) {
+      return null;
+    }
+
+    return result.rows[0];
+  } catch (err) {
+    console.error('Error fetching order by customer ID:', err);
+    throw err;
+  }
+};

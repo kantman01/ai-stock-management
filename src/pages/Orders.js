@@ -60,11 +60,11 @@ import { PERMISSIONS } from '../utils/roles';
 import api, { apiServices } from '../services/api';
 
 const ORDER_STATUS = {
-  PENDING: 'PENDING',
-  APPROVED: 'APPROVED',
-  SHIPPED: 'SHIPPED',
-  DELIVERED: 'DELIVERED',
-  CANCELLED: 'CANCELLED'
+  PENDING: 'pending',
+  APPROVED: 'approved',
+  SHIPPED: 'shipped',
+  DELIVERED: 'delivered',
+  CANCELLED: 'cancelled'
 };
 
 const ORDER_STATUS_LABELS = {
@@ -111,43 +111,25 @@ const Orders = () => {
     itemsValid: false
   });
 
+  const [newOrderDialogOpen, setNewOrderDialogOpen] = useState(false);
+  const [newOrderData, setNewOrderData] = useState({
+    customer_id: null,
+    customer: null
+  });
+  const [validationErrors, setValidationErrors] = useState({
+    customer_id: ''
+  });
+
   useEffect(() => {
-
-    const fetchOrders = async () => {
-      setLoading(true);
-      try {
-
-        const params = {
-          limit: rowsPerPage,
-          offset: page * rowsPerPage,
-          search: filters.search || undefined,
-          status: filters.status || undefined,
-          start_date: filters.startDate ? dayjs(filters.startDate).format('YYYY-MM-DD') : undefined,
-          end_date: filters.endDate ? dayjs(filters.endDate).format('YYYY-MM-DD') : undefined
-        };
-
-        if (isCustomer && user?.customer_id) {
-          params.customer_id = user.customer_id;
-        }
-
-        const response = await apiServices.orders.getAll(params);
-
-        setOrders(response.data.data || []);
-        setFilteredOrders(response.data.data || []);
-        setTotalCount(response.data.pagination?.total || 0);
-        setError(null);
-      } catch (error) {
-        console.error('Error fetching orders:', error);
-        setError('Error loading orders: ' + (error.message || 'Unknown error'));
-        setOrders([]);
-        setFilteredOrders([]);
-      } finally {
-        setLoading(false);
-      }
-    };
-
     fetchOrders();
-  }, [page, rowsPerPage, filters, user]);
+    
+    
+    if (user?.role?.code !== 'customer') {
+      fetchCustomers();
+    }
+    
+    fetchProducts();
+  }, [page, rowsPerPage, filters.status, filters.startDate, filters.endDate, user]);
 
   useEffect(() => {
     if (openNewOrderDialog) {
@@ -219,6 +201,7 @@ const Orders = () => {
     try {
       setLoading(true);
       const response = await api.get(`/orders/${order.id}`);
+      console.log("selected order",response.data);
       setSelectedOrder(response.data);
       setOrderDetailsDialog(true);
     } catch (error) {
@@ -274,73 +257,148 @@ const Orders = () => {
   };
 
   const handleCancelOrder = async (orderId) => {
+    const order = orders.find(o => o.id === orderId);
+    
+    
+    if (isCustomer && order) {
+      if (order.status !== ORDER_STATUS.PENDING) {
+        setSnackbar({
+          open: true,
+          message: 'Only pending orders can be cancelled',
+          severity: 'error'
+        });
+        return;
+      }
+      
+      
+      if (user?.customerId && order.customer_id !== user.customerId) {
+        setSnackbar({
+          open: true,
+          message: 'You can only cancel your own orders',
+          severity: 'error'
+        });
+        return;
+      }
+    }
+
     try {
-      setLoading(true);
+      
+      if (!window.confirm('Are you sure you want to cancel this order?')) {
+        return;
+      }
 
       await api.delete(`/orders/${orderId}`);
 
       setSnackbar({
         open: true,
-        message: `Order cancelled successfully`,
+        message: 'Order cancelled successfully',
         severity: 'success'
       });
 
-      const updatedOrders = orders.map(order =>
-        order.id === orderId ? { ...order, status: 'cancelled' } : order
-      );
-
-      setOrders(updatedOrders);
-      setFilteredOrders(updatedOrders);
-
-      if (selectedOrder && selectedOrder.id === orderId) {
-        setSelectedOrder({ ...selectedOrder, status: 'cancelled' });
-      }
-
+      
+      fetchOrders();
     } catch (error) {
       console.error('Error cancelling order:', error);
       setSnackbar({
         open: true,
-        message: 'Error cancelling order: ' + (error.message || 'Unknown error'),
+        message: error.response?.data?.message || 'Failed to cancel order',
         severity: 'error'
       });
-    } finally {
-      setLoading(false);
     }
   };
 
   const getStatusChip = (status) => {
     let color;
+    let icon;
 
     switch (status) {
       case ORDER_STATUS.PENDING:
         color = 'warning';
+        icon = <FilterListIcon fontSize="small" />;
         break;
       case ORDER_STATUS.APPROVED:
         color = 'info';
+        icon = <CheckIcon fontSize="small" />;
         break;
       case ORDER_STATUS.SHIPPED:
         color = 'primary';
+        icon = <ShippingIcon fontSize="small" />;
         break;
       case ORDER_STATUS.DELIVERED:
         color = 'success';
+        icon = <CheckIcon fontSize="small" />;
         break;
       case ORDER_STATUS.CANCELLED:
         color = 'error';
+        icon = <CancelIcon fontSize="small" />;
         break;
       default:
         color = 'default';
+        icon = null;
     }
+
+    const chipStyles = {
+      PENDING: {
+        bgcolor: '#fff3cd',
+        color: '#856404',
+        border: '1px solid #ffeeba'
+      },
+      APPROVED: {
+        bgcolor: '#d1ecf1',
+        color: '#0c5460',
+        border: '1px solid #bee5eb'
+      },
+      SHIPPED: {
+        bgcolor: '#cce5ff',
+        color: '#004085',
+        border: '1px solid #b8daff'
+      },
+      DELIVERED: {
+        bgcolor: '#d4edda',
+        color: '#155724',
+        border: '1px solid #c3e6cb'
+      },
+      CANCELLED: {
+        bgcolor: '#f8d7da',
+        color: '#721c24',
+        border: '1px solid #f5c6cb'
+      }
+    };
 
     return (
       <Chip
+        icon={icon}
         label={ORDER_STATUS_LABELS[status] || status}
         color={color}
         size="small"
+        sx={{ 
+          fontWeight: 'bold',
+          ...chipStyles[status]
+        }}
       />
     );
   };
 
   const getStatusActions = (order) => {
+    
+    if (isCustomer) {
+      if (order.status === ORDER_STATUS.PENDING) {
+        return (
+          <Tooltip title="Cancel Order">
+            <IconButton
+              color="error"
+              size="small"
+              onClick={() => handleCancelOrder(order.id)}
+            >
+              <CancelIcon />
+            </IconButton>
+          </Tooltip>
+        );
+      }
+      return null;
+    }
+
+    
     if (!canManageOrders) return null;
 
     const { id, status } = order;
@@ -402,13 +460,20 @@ const Orders = () => {
   };
 
   const handleOpenNewOrderDialog = () => {
-    setSelectedCustomer(null);
-    setOrderItems([]);
-    setOpenNewOrderDialog(true);
+    
+    if (user?.role?.code === 'customer' && user?.customerId) {
+      setNewOrderData(prev => ({
+        ...prev,
+        customer_id: user.customerId,
+        customer: customers.find(c => c.id === user.customerId) || null
+      }));
+    }
+    
+    setNewOrderDialogOpen(true);
   };
 
   const handleCloseNewOrderDialog = () => {
-    setOpenNewOrderDialog(false);
+    setNewOrderDialogOpen(false);
   };
 
   const handleCustomerChange = (event, newValue) => {
@@ -518,24 +583,137 @@ const Orders = () => {
     setSnackbar({ ...snackbar, open: false });
   };
 
+  const fetchOrders = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const params = {
+        limit: rowsPerPage,
+        offset: page * rowsPerPage,
+        sort_by: 'created_at',
+        sort_dir: 'DESC'
+      };
+      
+      if (filters.status) {
+        params.status = filters.status;
+      }
+      
+      if (filters.startDate) {
+        params.start_date = dayjs(filters.startDate).format('YYYY-MM-DD');
+      }
+      
+      if (filters.endDate) {
+        params.end_date = dayjs(filters.endDate).format('YYYY-MM-DD');
+      }
+      
+      
+      if (isCustomer && user?.customerId) {
+        params.customer_id = user.customerId;
+      }
+
+      const response = await apiServices.orders.getAll(params);
+      
+      setOrders(response.data.data || []);
+      setFilteredOrders(response.data.data || []);
+      setTotalCount(response.data.pagination?.total || 0);
+    } catch (err) {
+      console.error('Error fetching orders:', err);
+      setError('Failed to load orders. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fetchCustomers = async () => {
+    try {
+      const response = await api.get('/customers');
+      setCustomers(response.data.data || []);
+    } catch (error) {
+      console.error('Error fetching customers:', error);
+      setSnackbar({
+        open: true,
+        message: 'Error loading customers: ' + (error.message || 'Unknown error'),
+        severity: 'error'
+      });
+    }
+  };
+
+  const fetchProducts = async () => {
+    try {
+      const response = await api.get('/products');
+      setProducts(response.data.data || []);
+    } catch (error) {
+      console.error('Error fetching products:', error);
+      setSnackbar({
+        open: true,
+        message: 'Error loading products: ' + (error.message || 'Unknown error'),
+        severity: 'error'
+      });
+    }
+  };
+
+  const renderCustomerField = () => {
+    
+    if (isCustomer && user?.customerId) {
+      const customerName = user.customer_name || 
+                          `Customer #${user.customerId}`;
+      
+      return (
+        <TextField
+          fullWidth
+          label="Customer"
+          value={customerName}
+          disabled
+          margin="normal"
+          helperText="Order will be created for your account"
+        />
+      );
+    }
+    console.log(customers);
+    
+    return (
+      <Autocomplete
+        value={selectedCustomer}
+        onChange={(event, newValue) => {
+          setSelectedCustomer(newValue);
+        }}
+        options={customers}
+        getOptionLabel={(option) => option.first_name + ' ' + option.last_name || ''}
+        isOptionEqualToValue={(option, value) => option.id === value.id}
+        renderInput={(params) => (
+          <TextField
+            {...params}
+            label="Select Customer"
+            required
+            margin="normal"
+            error={!!validationErrors.customer_id}
+            helperText={validationErrors.customer_id}
+          />
+        )}
+      />
+    );
+  };
+
   return (
     <Box sx={{ p: 3 }}>
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-        <Typography variant="h5" component="h1" fontWeight="bold">
-          {isCustomer ? 'My Orders' : 'Orders'}
-        </Typography>
-
-        {canCreateOrders && (
-          <Button
-            variant="contained"
-            color="primary"
-            startIcon={<AddIcon />}
-            onClick={handleOpenNewOrderDialog}
-          >
-            New Order
-          </Button>
-        )}
-      </Box>
+      <Grid container justifyContent="space-between" alignItems="center" mb={3}>
+        <Grid item>
+          <Typography variant="h5" component="h1">
+            {isCustomer ? "My Orders" : "Orders Management"}
+          </Typography>
+        </Grid>
+        <Grid item>
+          {!isCustomer && canCreateOrders && (
+            <Button
+              variant="contained"
+              startIcon={<AddIcon />}
+              onClick={handleOpenNewOrderDialog}
+            >
+              Create Order
+            </Button>
+          )}
+        </Grid>
+      </Grid>
 
       <Paper sx={{ p: 2, mb: 3 }}>
         <Typography variant="subtitle1" fontWeight="bold" sx={{ mb: 2 }}>
@@ -869,36 +1047,36 @@ const Orders = () => {
                 )}
               </>
             )}
+            {isCustomer && selectedOrder.status === 'pending' && (
+              <Button
+                onClick={() => {
+                  handleCancelOrder(selectedOrder.id);
+                  handleCloseDialog();
+                }}
+                color="error"
+              >
+                Cancel Order
+              </Button>
+            )}
             <Button onClick={handleCloseDialog}>Close</Button>
           </DialogActions>
         </Dialog>
       )}
 
       {/* New Order Dialog */}
-      <Dialog open={openNewOrderDialog} onClose={handleCloseNewOrderDialog} maxWidth="md" fullWidth>
+      <Dialog
+        open={newOrderDialogOpen}
+        onClose={handleCloseNewOrderDialog}
+        maxWidth="md"
+        fullWidth
+      >
         <DialogTitle>Create New Order</DialogTitle>
-        <DialogContent dividers>
-          <Grid container spacing={3}>
-            {/* Customer Selection */}
+        <DialogContent>
+          <Grid container spacing={2}>
             <Grid item xs={12}>
-              <Autocomplete
-                id="customer-select"
-                options={customers}
-                getOptionLabel={(option) => `${option.first_name} ${option.last_name}`}
-                value={selectedCustomer}
-                onChange={handleCustomerChange}
-                renderInput={(params) => (
-                  <TextField
-                    {...params}
-                    label="Customer"
-                    required
-                    variant="outlined"
-                    fullWidth
-                  />
-                )}
-              />
+              {renderCustomerField()}
             </Grid>
-
+            
             {/* Product Selection */}
             <Grid item xs={12}>
               <Typography variant="subtitle1" gutterBottom>

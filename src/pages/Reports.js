@@ -85,19 +85,19 @@ ChartJS.register(
 );
 
 const PREDEFINED_REPORTS = [
-  { id: 1, name: 'Aylık Satış Raporu', type: 'sales', icon: <LineChartIcon /> },
-  { id: 2, name: 'Kategori Bazlı Satışlar', type: 'category', icon: <PieChartIcon /> },
-  { id: 3, name: 'Stok Seviyesi Raporu', type: 'inventory', icon: <BarChartIcon /> },
-  { id: 4, name: 'Müşteri Satın Alma Analizi', type: 'customer', icon: <GroupIcon /> },
-  { id: 5, name: 'Tedarikçi Performans Raporu', type: 'supplier', icon: <StoreIcon /> }
+  { id: 1, name: 'Monthly Sales Report', type: 'sales', icon: <LineChartIcon /> },
+  { id: 2, name: 'Category-Based Sales', type: 'category', icon: <PieChartIcon /> },
+  { id: 3, name: 'Stock Level Report', type: 'inventory', icon: <BarChartIcon /> },
+  { id: 4, name: 'Customer Purchase Analysis', type: 'customer', icon: <GroupIcon /> },
+  { id: 5, name: 'Supplier Performance Report', type: 'supplier', icon: <StoreIcon /> }
 ];
 
 const REPORT_TYPES = [
-  { value: 'sales', label: 'Satış Raporları', icon: <ShoppingCartIcon /> },
-  { value: 'inventory', label: 'Envanter Raporları', icon: <InventoryIcon /> },
-  { value: 'category', label: 'Kategori Raporları', icon: <CategoryIcon /> },
-  { value: 'customer', label: 'Müşteri Raporları', icon: <GroupIcon /> },
-  { value: 'supplier', label: 'Tedarikçi Raporları', icon: <StoreIcon /> }
+  { value: 'sales', label: 'Sales Reports', icon: <ShoppingCartIcon /> },
+  { value: 'inventory', label: 'Inventory Reports', icon: <InventoryIcon /> },
+  { value: 'category', label: 'Category Reports', icon: <CategoryIcon /> },
+  { value: 'customer', label: 'Customer Reports', icon: <GroupIcon /> },
+  { value: 'supplier', label: 'Supplier Reports', icon: <StoreIcon /> }
 ];
 
 const Reports = () => {
@@ -219,7 +219,7 @@ const Reports = () => {
 
   const handleGenerateReport = async () => {
     if (!reportForm.type || !reportForm.name) {
-      setError('Lütfen rapor türü ve adını girin.');
+      setError('Please enter report type and name.');
       return;
     }
 
@@ -716,7 +716,7 @@ const Reports = () => {
   return (
     <Box sx={{ p: 3 }}>
       <Typography variant="h5" component="h1" fontWeight="bold" sx={{ mb: 3 }}>
-        Raporlar
+        Reports
       </Typography>
 
       <Paper sx={{ mb: 3 }}>
@@ -727,9 +727,9 @@ const Reports = () => {
           textColor="primary"
           centered
         >
-          <Tab label="Hazır Raporlar" />
-          <Tab label="Yeni Rapor" />
-          <Tab label="Rapor Geçmişi" />
+          <Tab label="Predefined Reports" />
+          <Tab label="New Report" />
+          <Tab label="Report History" />
         </Tabs>
       </Paper>
 
@@ -739,7 +739,7 @@ const Reports = () => {
           <Grid item xs={12} md={4}>
             <Paper sx={{ p: 2 }}>
               <Typography variant="subtitle1" fontWeight="bold" sx={{ mb: 2 }}>
-                Hazır Raporlar
+                Predefined Reports
               </Typography>
               <List>
                 {PREDEFINED_REPORTS.map((report) => (
@@ -772,13 +772,13 @@ const Reports = () => {
                         {selectedReport.name}
                       </Typography>
                       <Box>
-                        <IconButton color="primary" title="İndir" onClick={() => handleDownloadReport(selectedReport)}>
+                        <IconButton color="primary" title="Download" onClick={() => handleDownloadReport(selectedReport)}>
                           <DownloadIcon />
                         </IconButton>
-                        <IconButton color="primary" title="Yazdır">
+                        <IconButton color="primary" title="Print">
                           <PrintIcon />
                         </IconButton>
-                        <IconButton color="primary" title="Paylaş">
+                        <IconButton color="primary" title="Share">
                           <ShareIcon />
                         </IconButton>
                       </Box>
@@ -799,7 +799,7 @@ const Reports = () => {
               ) : (
                 <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '300px' }}>
                   <Typography variant="body1" color="text.secondary">
-                    Görüntülemek için bir rapor seçin
+                    Select a report to view
                   </Typography>
                 </Box>
               )}
@@ -812,7 +812,7 @@ const Reports = () => {
       {activeTab === 1 && (
         <Paper sx={{ p: 3 }}>
           <Typography variant="h6" gutterBottom>
-            Yeni Rapor Oluştur
+            Create New Report
           </Typography>
 
           {error && (
@@ -824,11 +824,11 @@ const Reports = () => {
           <Grid container spacing={3}>
             <Grid item xs={12} md={6}>
               <FormControl fullWidth required>
-                <InputLabel>Rapor Türü</InputLabel>
+                <InputLabel>Report Type</InputLabel>
                 <Select
                   name="type"
                   value={reportForm.type}
-                  label="Rapor Türü"
+                  label="Report Type"
                   onChange={handleReportFormChange}
                 >
                   {REPORT_TYPES.map((type) => (
@@ -845,7 +845,7 @@ const Reports = () => {
             <Grid item xs={12} md={6}>
               <TextField
                 name="name"
-                label="Rapor Adı"
+                label="Report Name"
                 fullWidth
                 required
                 value={reportForm.name}
@@ -872,11 +872,11 @@ const Reports = () => {
             </Grid>
             <Grid item xs={12} md={6}>
               <FormControl fullWidth>
-                <InputLabel>Dosya Formatı</InputLabel>
+                <InputLabel>File Format</InputLabel>
                 <Select
                   name="format"
                   value={reportForm.format}
-                  label="Dosya Formatı"
+                  label="File Format"
                   onChange={handleReportFormChange}
                 >
                   <MenuItem value="pdf">PDF</MenuItem>
@@ -893,7 +893,7 @@ const Reports = () => {
                   onClick={handleGenerateReport}
                   disabled={loading || !reportForm.type || !reportForm.name}
                 >
-                  {loading ? <CircularProgress size={24} /> : 'Rapor Oluştur'}
+                  {loading ? <CircularProgress size={24} /> : 'Generate Report'}
                 </Button>
               </Box>
             </Grid>
@@ -905,7 +905,7 @@ const Reports = () => {
       {activeTab === 2 && (
         <Paper sx={{ p: 2 }}>
           <Typography variant="subtitle1" fontWeight="bold" sx={{ mb: 2 }}>
-            Oluşturulan Raporlar
+            Generated Reports
           </Typography>
 
           {loading ? (
@@ -929,7 +929,7 @@ const Reports = () => {
                     </ListItemIcon>
                     <ListItemText
                       primary={report.name}
-                      secondary={`${new Date(report.created_at).toLocaleString('tr-TR')}`}
+                      secondary={`${new Date(report.created_at).toLocaleString()}`}
                     />
                     <ListItemSecondaryAction sx={{ display: 'flex', alignItems: 'center' }}>
                       {getFormatChip(report.format)}
@@ -944,7 +944,7 @@ const Reports = () => {
                 ))
               ) : (
                 <ListItem>
-                  <ListItemText primary="Henüz rapor oluşturulmadı." />
+                  <ListItemText primary="No reports have been generated yet." />
                 </ListItem>
               )}
             </List>

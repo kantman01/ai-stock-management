@@ -31,9 +31,55 @@ exports.updateUserValidation = [
   body('password')
     .optional()
     .isLength({ min: 6 }).withMessage('Şifre en az 6 karakter olmalıdır.'),
+  body('firstName')
+    .optional()
+    .notEmpty().withMessage('Ad boş olamaz.'),
+  body('lastName')
+    .optional()
+    .notEmpty().withMessage('Soyad boş olamaz.'),
   body('roleId')
     .optional()
-    .isInt().withMessage('Geçerli bir rol ID\'si giriniz.')
+    .isInt().withMessage('Geçerli bir rol ID\'si giriniz.'),
+  body('phone')
+    .optional()
+    .isString().withMessage('Telefon numarası geçerli bir format olmalıdır.'),
+  body('position')
+    .optional(),
+  body('department')
+    .optional(),
+  body('isActive')
+    .optional()
+    .isBoolean().withMessage('is_active boolean değer olmalıdır.'),
+  body('avatar')
+    .optional(),
+  body('bio')
+    .optional(),
+  
+  body('supplierName')
+    .optional(),
+  body('address')
+    .optional(),
+  body('city')
+    .optional(),
+  body('state')
+    .optional(),
+  body('country')
+    .optional(),
+  body('postalCode')
+    .optional(),
+  body('website')
+    .optional()
+    .if(body('website').exists())
+    .isURL().withMessage('Website geçerli bir URL olmalıdır.'),
+  body('notes')
+    .optional(),
+  body('taxId')
+    .optional(),
+  body('paymentTerms')
+    .optional(),
+  
+  body('companyName')
+    .optional()
 ];
 
 exports.changePasswordValidation = [
@@ -50,18 +96,6 @@ exports.changePasswordValidation = [
       }
       return true;
     })
-];
-
-exports.updateProfileValidation = [
-  body('firstName')
-    .optional()
-    .notEmpty().withMessage('Ad boş olamaz.'),
-  body('lastName')
-    .optional()
-    .notEmpty().withMessage('Soyad boş olamaz.'),
-  body('phone')
-    .optional()
-    .isString().withMessage('Telefon numarası geçerli bir format olmalıdır.')
 ];
 
 exports.forgotPasswordValidation = [

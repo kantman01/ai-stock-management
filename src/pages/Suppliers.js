@@ -136,6 +136,7 @@ const Suppliers = () => {
     name: '',
     contact_name: '',
     email: '',
+    password: '',
     phone: '',
     address: '',
     city: '',
@@ -150,7 +151,7 @@ const Suppliers = () => {
   });
 
   const { user } = useSelector(state => state.auth);
-  const canManageSuppliers = hasPermission(user?.role?.code, PERMISSIONS.MANAGE_SUPPLIERS);
+  const canManageSuppliers = hasPermission(user, PERMISSIONS.MANAGE_SUPPLIERS);
 
   useEffect(() => {
     fetchSuppliers();
@@ -203,6 +204,7 @@ const Suppliers = () => {
       name: '',
       contact_name: '',
       email: '',
+      password: '',
       phone: '',
       address: '',
       city: '',
@@ -266,10 +268,27 @@ const Suppliers = () => {
   };
 
   const validateForm = () => {
+    let errorMessages = [];
+    
     if (!currentSupplier.name) {
-      setError('Supplier name is required.');
+      errorMessages.push('Supplier name is required.');
+    }
+    
+    if (currentSupplier.email && !/\S+@\S+\.\S+/.test(currentSupplier.email)) {
+      errorMessages.push('Email format is invalid.');
+    }
+    
+    if (dialogAction === 'add' && !currentSupplier.password) {
+      errorMessages.push('Password is required for new supplier account.');
+    } else if (currentSupplier.password && currentSupplier.password.length < 8) {
+      errorMessages.push('Password must be at least 8 characters.');
+    }
+    
+    if (errorMessages.length > 0) {
+      setError(errorMessages.join(' '));
       return false;
     }
+    
     return true;
   };
 
@@ -646,6 +665,19 @@ const Suppliers = () => {
                 value={currentSupplier.email}
                 onChange={handleInputChange}
                 type="email"
+                required={dialogAction === 'add'}
+              />
+            </Grid>
+            <Grid item xs={12} sm={6}>
+              <TextField
+                fullWidth
+                label={dialogAction === 'add' ? "Password*" : "Password (Leave blank to keep current)"}
+                name="password"
+                value={currentSupplier.password}
+                onChange={handleInputChange}
+                type="password"
+                required={dialogAction === 'add'}
+                helperText={dialogAction === 'edit' && "Only enter a password if you want to change it."}
               />
             </Grid>
             <Grid item xs={12} sm={6}>

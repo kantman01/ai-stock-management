@@ -4,8 +4,7 @@ const userController = require('../controllers/userController');
 const { authenticateJWT, checkPermission } = require('../middleware/auth');
 const {
   createUserValidation,
-  updateUserValidation,
-  updateProfileValidation
+  updateUserValidation
 } = require('../utils/validators');
 
 router.get('/', authenticateJWT, checkPermission('VIEW_USERS'), userController.getUsers);
@@ -16,12 +15,9 @@ router.get('/:id', authenticateJWT, checkPermission('VIEW_USERS'), userControlle
 
 router.post('/', authenticateJWT, checkPermission('MANAGE_USERS'), createUserValidation, userController.createUser);
 
-router.put('/:id', authenticateJWT, checkPermission('MANAGE_USERS'), updateUserValidation, userController.updateUser);
+router.put('/:id', authenticateJWT, updateUserValidation, userController.updateUser);
 
 router.delete('/:id', authenticateJWT, checkPermission('MANAGE_USERS'), userController.deleteUser);
-
-router.put('/profile', authenticateJWT, updateProfileValidation, userController.updateProfile);
-
 
 router.get('/:id/permissions', userController.getUserPermissions);
 

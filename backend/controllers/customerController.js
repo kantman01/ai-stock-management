@@ -1,4 +1,5 @@
 const { query } = require('../config/db');
+const bcrypt = require('bcrypt');
 
 /**
  * Get all customers with optional filtering
@@ -70,8 +71,10 @@ exports.getCustomerById = async (req, res) => {
     const customerSql = `
       SELECT c.*,
       (SELECT COUNT(*) FROM orders WHERE customer_id = c.id) as order_count,
-      (SELECT COALESCE(SUM(total_amount), 0) FROM orders WHERE customer_id = c.id) as total_spent
+      (SELECT COALESCE(SUM(total_amount), 0) FROM orders WHERE customer_id = c.id) as total_spent,
+      u.email as user_email, u.is_active as user_is_active
       FROM customers c
+      LEFT JOIN users u ON c.user_id = u.id
       WHERE c.id = $1
     `;
 
@@ -103,7 +106,7 @@ exports.getCustomerById = async (req, res) => {
 };
 
 /**
- * Create a new customer
+ * Create a new customer with a user account
  */
 exports.createCustomer = async (req, res) => {
   try {
@@ -111,54 +114,120 @@ exports.createCustomer = async (req, res) => {
       first_name,
       last_name,
       email,
+      password,
       phone,
       address,
       city,
       state,
       postal_code,
       country,
+      company_name,
       notes,
       is_active = true
     } = req.body;
 
+    
     if (!first_name || !last_name) {
       return res.status(400).json({ message: 'First name and last name are required' });
     }
 
+    if (!email || !password) {
+      return res.status(400).json({ message: 'Email and password are required for the customer account' });
+    }
+
+    
     if (email) {
-      const emailCheck = await query('SELECT * FROM customers WHERE email = $1', [email]);
+      const emailCheck = await query('SELECT * FROM users WHERE email = $1', [email]);
       if (emailCheck.rows.length > 0) {
-        return res.status(400).json({ message: 'A customer with this email already exists' });
+        return res.status(400).json({ message: 'A user with this email already exists' });
       }
     }
 
-    const sql = `
-      INSERT INTO customers (
-        first_name, last_name, email, phone, address, city,
-        state, postal_code, country, notes, is_active, created_by
-      )
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
-      RETURNING *
-    `;
+    
+    await query('BEGIN');
 
-    const values = [
-      first_name,
-      last_name,
-      email,
-      phone,
-      address,
-      city,
-      state,
-      postal_code,
-      country,
-      notes,
-      is_active,
-      req.user?.id || null
-    ];
+    try {
+      
+      
+      const salt = await bcrypt.genSalt(10);
+      const hashedPassword = await bcrypt.hash(password, salt);
 
-    const result = await query(sql, values);
+      
+      const roleResult = await query('SELECT id FROM roles WHERE code = $1', ['customer']);
+      if (roleResult.rows.length === 0) {
+        throw new Error('Customer role not found');
+      }
+      const roleId = roleResult.rows[0].id;
 
-    res.status(201).json(result.rows[0]);
+      
+      const userSql = `
+        INSERT INTO users (
+          email, password, first_name, last_name, role_id, is_active
+        )
+        VALUES ($1, $2, $3, $4, $5, $6)
+        RETURNING id
+      `;
+
+      const userResult = await query(userSql, [
+        email,
+        hashedPassword,
+        first_name,
+        last_name,
+        roleId,
+        is_active
+      ]);
+
+      const userId = userResult.rows[0].id;
+
+      
+      const customerSql = `
+        INSERT INTO customers (
+          first_name, last_name, email, phone, address, city,
+          state, postal_code, country, company_name, notes, 
+          is_active, created_by, user_id
+        )
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+        RETURNING *
+      `;
+
+      const values = [
+        first_name,
+        last_name,
+        email,
+        phone,
+        address,
+        city,
+        state,
+        postal_code,
+        country,
+        company_name,
+        notes,
+        is_active,
+        req.user?.id || null,
+        userId
+      ];
+
+      const customerResult = await query(customerSql, values);
+      
+      
+      await query('COMMIT');
+
+      
+      res.status(201).json({
+        ...customerResult.rows[0],
+        user: {
+          id: userId,
+          email,
+          first_name,
+          last_name,
+          is_active
+        }
+      });
+    } catch (error) {
+      
+      await query('ROLLBACK');
+      throw error;
+    }
   } catch (err) {
     console.error('Error creating customer:', err);
     res.status(500).json({ message: 'Error creating customer', error: err.message });
@@ -166,7 +235,7 @@ exports.createCustomer = async (req, res) => {
 };
 
 /**
- * Update a customer
+ * Update a customer and associated user
  */
 exports.updateCustomer = async (req, res) => {
   try {
@@ -175,111 +244,196 @@ exports.updateCustomer = async (req, res) => {
       first_name,
       last_name,
       email,
+      password,
       phone,
       address,
       city,
       state,
       postal_code,
       country,
+      company_name,
       notes,
       is_active
     } = req.body;
 
+    
     const checkResult = await query('SELECT * FROM customers WHERE id = $1', [id]);
 
     if (checkResult.rows.length === 0) {
       return res.status(404).json({ message: 'Customer not found' });
     }
 
-    if (email) {
-      const emailCheck = await query('SELECT * FROM customers WHERE email = $1 AND id != $2', [email, id]);
+    const customer = checkResult.rows[0];
+    const userId = customer.user_id;
+
+    
+    if (email && email !== customer.email) {
+      const emailCheck = await query('SELECT * FROM users WHERE email = $1 AND id != $2', [email, userId]);
       if (emailCheck.rows.length > 0) {
-        return res.status(400).json({ message: 'A customer with this email already exists' });
+        return res.status(400).json({ message: 'A user with this email already exists' });
       }
     }
 
-    const updates = [];
-    const values = [];
-    let paramCount = 1;
+    await query('BEGIN');
 
-    if (first_name !== undefined) {
-      updates.push(`first_name = $${paramCount++}`);
-      values.push(first_name);
+    try {
+      
+      if (userId) {
+        const userUpdates = [];
+        const userValues = [];
+        let userParamCount = 1;
+
+        if (email !== undefined) {
+          userUpdates.push(`email = $${userParamCount++}`);
+          userValues.push(email);
+        }
+
+        if (first_name !== undefined) {
+          userUpdates.push(`first_name = $${userParamCount++}`);
+          userValues.push(first_name);
+        }
+
+        if (last_name !== undefined) {
+          userUpdates.push(`last_name = $${userParamCount++}`);
+          userValues.push(last_name);
+        }
+
+        if (is_active !== undefined) {
+          userUpdates.push(`is_active = $${userParamCount++}`);
+          userValues.push(is_active);
+        }
+
+        
+        if (password) {
+          const salt = await bcrypt.genSalt(10);
+          const hashedPassword = await bcrypt.hash(password, salt);
+          userUpdates.push(`password = $${userParamCount++}`);
+          userValues.push(hashedPassword);
+        }
+
+        if (userUpdates.length > 0) {
+          userUpdates.push(`updated_at = NOW()`);
+          
+          const userSql = `
+            UPDATE users 
+            SET ${userUpdates.join(', ')}
+            WHERE id = $${userParamCount}
+          `;
+          
+          userValues.push(userId);
+          await query(userSql, userValues);
+        }
+      }
+
+      
+      const customerUpdates = [];
+      const customerValues = [];
+      let customerParamCount = 1;
+
+      if (first_name !== undefined) {
+        customerUpdates.push(`first_name = $${customerParamCount++}`);
+        customerValues.push(first_name);
+      }
+
+      if (last_name !== undefined) {
+        customerUpdates.push(`last_name = $${customerParamCount++}`);
+        customerValues.push(last_name);
+      }
+
+      if (email !== undefined) {
+        customerUpdates.push(`email = $${customerParamCount++}`);
+        customerValues.push(email);
+      }
+
+      if (phone !== undefined) {
+        customerUpdates.push(`phone = $${customerParamCount++}`);
+        customerValues.push(phone);
+      }
+
+      if (address !== undefined) {
+        customerUpdates.push(`address = $${customerParamCount++}`);
+        customerValues.push(address);
+      }
+
+      if (city !== undefined) {
+        customerUpdates.push(`city = $${customerParamCount++}`);
+        customerValues.push(city);
+      }
+
+      if (state !== undefined) {
+        customerUpdates.push(`state = $${customerParamCount++}`);
+        customerValues.push(state);
+      }
+
+      if (postal_code !== undefined) {
+        customerUpdates.push(`postal_code = $${customerParamCount++}`);
+        customerValues.push(postal_code);
+      }
+
+      if (country !== undefined) {
+        customerUpdates.push(`country = $${customerParamCount++}`);
+        customerValues.push(country);
+      }
+
+      if (company_name !== undefined) {
+        customerUpdates.push(`company_name = $${customerParamCount++}`);
+        customerValues.push(company_name);
+      }
+
+      if (notes !== undefined) {
+        customerUpdates.push(`notes = $${customerParamCount++}`);
+        customerValues.push(notes);
+      }
+
+      if (is_active !== undefined) {
+        customerUpdates.push(`is_active = $${customerParamCount++}`);
+        customerValues.push(is_active);
+      }
+
+      customerUpdates.push(`updated_at = NOW()`);
+
+      if (req.user?.id) {
+        customerUpdates.push(`updated_by = $${customerParamCount++}`);
+        customerValues.push(req.user.id);
+      }
+
+      if (customerUpdates.length > 0) {
+        const sql = `
+          UPDATE customers
+          SET ${customerUpdates.join(', ')}
+          WHERE id = $${customerParamCount}
+          RETURNING *
+        `;
+
+        customerValues.push(id);
+        const result = await query(sql, customerValues);
+        
+        await query('COMMIT');
+        
+        
+        let userInfo = null;
+        if (userId) {
+          const userResult = await query(
+            'SELECT id, email, first_name, last_name, is_active FROM users WHERE id = $1',
+            [userId]
+          );
+          if (userResult.rows.length > 0) {
+            userInfo = userResult.rows[0];
+          }
+        }
+        
+        res.json({
+          ...result.rows[0],
+          user: userInfo
+        });
+      } else {
+        await query('COMMIT');
+        res.status(400).json({ message: 'No fields to update' });
+      }
+    } catch (error) {
+      await query('ROLLBACK');
+      throw error;
     }
-
-    if (last_name !== undefined) {
-      updates.push(`last_name = $${paramCount++}`);
-      values.push(last_name);
-    }
-
-    if (email !== undefined) {
-      updates.push(`email = $${paramCount++}`);
-      values.push(email);
-    }
-
-    if (phone !== undefined) {
-      updates.push(`phone = $${paramCount++}`);
-      values.push(phone);
-    }
-
-    if (address !== undefined) {
-      updates.push(`address = $${paramCount++}`);
-      values.push(address);
-    }
-
-    if (city !== undefined) {
-      updates.push(`city = $${paramCount++}`);
-      values.push(city);
-    }
-
-    if (state !== undefined) {
-      updates.push(`state = $${paramCount++}`);
-      values.push(state);
-    }
-
-    if (postal_code !== undefined) {
-      updates.push(`postal_code = $${paramCount++}`);
-      values.push(postal_code);
-    }
-
-    if (country !== undefined) {
-      updates.push(`country = $${paramCount++}`);
-      values.push(country);
-    }
-
-    if (notes !== undefined) {
-      updates.push(`notes = $${paramCount++}`);
-      values.push(notes);
-    }
-
-    if (is_active !== undefined) {
-      updates.push(`is_active = $${paramCount++}`);
-      values.push(is_active);
-    }
-
-    updates.push(`updated_at = NOW()`);
-
-    if (req.user?.id) {
-      updates.push(`updated_by = $${paramCount++}`);
-      values.push(req.user.id);
-    }
-
-    if (updates.length === 0) {
-      return res.status(400).json({ message: 'No fields to update' });
-    }
-
-    const sql = `
-      UPDATE customers
-      SET ${updates.join(', ')}
-      WHERE id = $${paramCount}
-      RETURNING *
-    `;
-
-    values.push(id);
-
-    const result = await query(sql, values);
-
-    res.json(result.rows[0]);
   } catch (err) {
     console.error('Error updating customer:', err);
     res.status(500).json({ message: 'Error updating customer', error: err.message });
@@ -287,32 +441,76 @@ exports.updateCustomer = async (req, res) => {
 };
 
 /**
- * Delete a customer (can be soft delete or hard delete)
+ * Delete a customer and optionally deactivate associated user
  */
 exports.deleteCustomer = async (req, res) => {
   try {
     const { id } = req.params;
+    const { deleteUser = false } = req.body; 
 
+    
     const checkResult = await query('SELECT * FROM customers WHERE id = $1', [id]);
 
     if (checkResult.rows.length === 0) {
       return res.status(404).json({ message: 'Customer not found' });
     }
 
+    const userId = checkResult.rows[0].user_id;
+
     const ordersResult = await query('SELECT COUNT(*) FROM orders WHERE customer_id = $1', [id]);
+    const hasOrders = parseInt(ordersResult.rows[0].count) > 0;
 
-    if (parseInt(ordersResult.rows[0].count) > 0) {
+    await query('BEGIN');
 
-      await query(
-        'UPDATE customers SET is_active = false, updated_at = NOW(), updated_by = $1 WHERE id = $2',
-        [req.user?.id || null, id]
-      );
-      return res.json({ message: 'Customer deactivated due to existing orders' });
+    try {
+      
+      if (hasOrders) {
+        
+        await query(
+          'UPDATE customers SET is_active = false, updated_at = NOW(), updated_by = $1 WHERE id = $2',
+          [req.user?.id || null, id]
+        );
+
+        
+        if (userId) {
+          await query('UPDATE users SET is_active = false, updated_at = NOW() WHERE id = $1', [userId]);
+        }
+
+        await query('COMMIT');
+        return res.json({ message: 'Customer deactivated due to existing orders' });
+      }
+
+      
+      await query('DELETE FROM customers WHERE id = $1', [id]);
+
+      
+      if (userId) {
+        if (deleteUser) {
+          
+          const otherAssociationsCheck = await query(
+            'SELECT 1 FROM suppliers WHERE user_id = $1 LIMIT 1',
+            [userId]
+          );
+
+          if (otherAssociationsCheck.rows.length === 0) {
+            
+            await query('DELETE FROM users WHERE id = $1', [userId]);
+          } else {
+            
+            await query('UPDATE users SET is_active = false, updated_at = NOW() WHERE id = $1', [userId]);
+          }
+        } else {
+          
+          await query('UPDATE users SET is_active = false, updated_at = NOW() WHERE id = $1', [userId]);
+        }
+      }
+
+      await query('COMMIT');
+      res.json({ message: 'Customer deleted successfully' });
+    } catch (error) {
+      await query('ROLLBACK');
+      throw error;
     }
-
-    await query('DELETE FROM customers WHERE id = $1', [id]);
-
-    res.json({ message: 'Customer deleted successfully' });
   } catch (err) {
     console.error('Error deleting customer:', err);
     res.status(500).json({ message: 'Error deleting customer', error: err.message });

@@ -49,4 +49,16 @@ router.get(
   productController.getStockMovements
 );
 
+/**
+ * @route   POST /api/products/upload-image
+ * @desc    Upload a product image
+ * @access  Private (with MANAGE_PRODUCTS permission)
+ */
+router.post(
+  '/upload-image',
+  authenticateJWT,
+  checkPermission('MANAGE_PRODUCTS'),
+  productController.uploadProductImage
+);
+
 module.exports = router; 

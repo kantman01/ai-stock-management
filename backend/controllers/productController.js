@@ -1,4 +1,7 @@
 const { query } = require('../config/db');
+const triggerNotifications = require('../utils/triggerNotifications');
+const path = require('path');
+const fs = require('fs');
 
 /**
  * Get all products with optional filtering
@@ -8,19 +11,21 @@ exports.getProducts = async (req, res) => {
     const {
       category_id,
       search,
+      in_stock,
       min_stock,
       max_stock,
-      is_active,
+      supplier_id,
       sort_by = 'name',
       sort_dir = 'ASC',
-      limit = 100,
+      limit = 50,
       offset = 0
     } = req.query;
 
     let sql = `
-      SELECT p.*, c.name as category_name 
+      SELECT p.*, c.name as category_name, s.name as supplier_name
       FROM products p
       LEFT JOIN categories c ON p.category_id = c.id
+      LEFT JOIN suppliers s ON p.supplier_id = s.id
       WHERE 1=1
     `;
 
@@ -32,8 +37,16 @@ exports.getProducts = async (req, res) => {
     }
 
     if (search) {
-      sql += ` AND (p.name ILIKE $${params.length + 1} OR p.description ILIKE $${params.length + 1} OR p.sku ILIKE $${params.length + 1})`;
+      sql += ` AND (
+        p.name ILIKE $${params.length + 1} OR
+        p.sku ILIKE $${params.length + 1} OR
+        p.barcode ILIKE $${params.length + 1}
+      )`;
       params.push(`%${search}%`);
+    }
+
+    if (in_stock === 'true') {
+      sql += ` AND p.stock_quantity > 0`;
     }
 
     if (min_stock !== undefined) {
@@ -46,19 +59,20 @@ exports.getProducts = async (req, res) => {
       params.push(max_stock);
     }
 
-    if (is_active !== undefined) {
-      sql += ` AND p.is_active = $${params.length + 1}`;
-      params.push(is_active === 'true');
+    if (supplier_id) {
+      sql += ` AND p.supplier_id = $${params.length + 1}`;
+      params.push(supplier_id);
     }
 
-    sql += ` ORDER BY ${sort_by} ${sort_dir}`;
-
-    sql += ` LIMIT $${params.length + 1} OFFSET $${params.length + 2}`;
-    params.push(limit, offset);
-
-    const countSql = sql.replace('SELECT p.*, c.name as category_name', 'SELECT COUNT(*)');
-    const countResult = await query(countSql.split('ORDER BY')[0], params.slice(0, -2));
+    
+    const countSql = sql.replace("p.*, c.name as category_name, s.name as supplier_name", "COUNT(*)");
+    const countResult = await query(countSql, params);
     const total = parseInt(countResult.rows[0].count);
+
+    
+    sql += ` ORDER BY ${sort_by} ${sort_dir}`;
+    sql += ` LIMIT $${params.length + 1} OFFSET $${params.length + 2}`;
+    params.push(parseInt(limit), parseInt(offset));
 
     const result = await query(sql, params);
 
@@ -85,9 +99,10 @@ exports.getProductById = async (req, res) => {
     const { id } = req.params;
 
     const sql = `
-      SELECT p.*, c.name as category_name 
+      SELECT p.*, c.name as category_name, s.name as supplier_name
       FROM products p
       LEFT JOIN categories c ON p.category_id = c.id
+      LEFT JOIN suppliers s ON p.supplier_id = s.id
       WHERE p.id = $1
     `;
 
@@ -115,6 +130,7 @@ exports.createProduct = async (req, res) => {
       barcode,
       sku,
       category_id,
+      supplier_id,
       price,
       cost_price,
       tax_rate,
@@ -127,13 +143,40 @@ exports.createProduct = async (req, res) => {
       dimensions
     } = req.body;
 
+    
+    if (!sku) {
+      return res.status(400).json({ message: 'SKU is a required field.' });
+    }
+
+    
+    const existingSku = await query('SELECT id FROM products WHERE sku = $1', [sku]);
+    if (existingSku.rows.length > 0) {
+      return res.status(400).json({ message: 'This SKU is already in use. Please enter a unique SKU.' });
+    }
+
+    
+    let productSupplierId = null;
+    
+    if (req.user && req.user.role.code === 'supplier' && req.user.supplierId) {
+      
+      productSupplierId = req.user.supplierId;
+    } else {
+      
+      productSupplierId = supplier_id || null;
+      
+      
+      if (!productSupplierId && req.user.role.code === 'staff') {
+        return res.status(400).json({ message: 'Supplier ID is required.' });
+      }
+    }
+
     const sql = `
       INSERT INTO products (
-        name, description, barcode, sku, category_id, price, cost_price,
+        name, description, barcode, sku, category_id, supplier_id, price, cost_price,
         tax_rate, stock_quantity, min_stock_quantity, reorder_quantity,
         image_url, is_active, weight, dimensions
       )
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
       RETURNING id
     `;
 
@@ -143,6 +186,7 @@ exports.createProduct = async (req, res) => {
       barcode,
       sku,
       category_id,
+      productSupplierId,
       price,
       cost_price,
       tax_rate || 0,
@@ -173,15 +217,28 @@ exports.createProduct = async (req, res) => {
     }
 
     const getProductSql = `
-      SELECT p.*, c.name as category_name 
+      SELECT p.*, c.name as category_name,
+        s.name as supplier_name
       FROM products p
       LEFT JOIN categories c ON p.category_id = c.id
+      LEFT JOIN suppliers s ON p.supplier_id = s.id
       WHERE p.id = $1
     `;
 
     const productResult = await query(getProductSql, [result.rows[0].id]);
+    
+    
+    const product = productResult.rows[0];
+    if (product.stock_quantity <= product.min_stock_quantity) {
+      try {
+        await triggerNotifications.lowStockNotification(product);
+      } catch (notifErr) {
+        console.error('Error creating low stock notification:', notifErr);
+        
+      }
+    }
 
-    res.status(201).json(productResult.rows[0]);
+    res.status(201).json(product);
   } catch (err) {
     console.error('Error creating product:', err);
     res.status(500).json({ message: 'Error creating product', error: err.message });
@@ -200,6 +257,7 @@ exports.updateProduct = async (req, res) => {
       barcode,
       sku,
       category_id,
+      supplier_id,
       price,
       cost_price,
       tax_rate,
@@ -211,10 +269,41 @@ exports.updateProduct = async (req, res) => {
       dimensions
     } = req.body;
 
+    
+    if (sku !== undefined && !sku) {
+      return res.status(400).json({ message: 'SKU is a required field.' });
+    }
+
     const checkResult = await query('SELECT * FROM products WHERE id = $1', [id]);
 
     if (checkResult.rows.length === 0) {
       return res.status(404).json({ message: 'Product not found' });
+    }
+
+    
+    if (req.user && req.user.role.code === 'supplier' && req.user.supplierId) {
+      if (checkResult.rows[0].supplier_id !== req.user.supplierId) {
+        return res.status(403).json({ message: 'You can only update your own products.' });
+      }
+    }
+
+    
+    if (sku !== undefined && sku !== checkResult.rows[0].sku) {
+      const existingSku = await query('SELECT id FROM products WHERE sku = $1 AND id != $2', [sku, id]);
+      if (existingSku.rows.length > 0) {
+        return res.status(400).json({ message: 'This SKU is already in use. Please enter a unique SKU.' });
+      }
+    }
+
+    
+    let productSupplierId = checkResult.rows[0].supplier_id;
+    
+    if (req.user && req.user.role.code === 'supplier' && req.user.supplierId) {
+      
+      productSupplierId = req.user.supplierId;
+    } else if (supplier_id !== undefined) {
+      
+      productSupplierId = supplier_id;
     }
 
     const updates = [];
@@ -245,6 +334,10 @@ exports.updateProduct = async (req, res) => {
       updates.push(`category_id = $${paramCount++}`);
       values.push(category_id);
     }
+    
+    
+    updates.push(`supplier_id = $${paramCount++}`);
+    values.push(productSupplierId);
 
     if (price !== undefined) {
       updates.push(`price = $${paramCount++}`);
@@ -309,15 +402,41 @@ exports.updateProduct = async (req, res) => {
     const result = await query(sql, values);
 
     const getProductSql = `
-      SELECT p.*, c.name as category_name 
+      SELECT p.*, c.name as category_name,
+        s.name as supplier_name
       FROM products p
       LEFT JOIN categories c ON p.category_id = c.id
+      LEFT JOIN suppliers s ON p.supplier_id = s.id
       WHERE p.id = $1
     `;
 
     const productResult = await query(getProductSql, [id]);
+    const product = productResult.rows[0];
+    
+    
+    if (price !== undefined && checkResult.rows[0].price != price) {
+      try {
+        const oldPrice = parseFloat(checkResult.rows[0].price);
+        const newPrice = parseFloat(price);
+        
+        await triggerNotifications.productPriceChangeNotification(product, oldPrice, newPrice);
+      } catch (notifErr) {
+        console.error('Error creating price change notification:', notifErr);
+        
+      }
+    }
+    
+    
+    if (product.stock_quantity <= product.min_stock_quantity) {
+      try {
+        await triggerNotifications.lowStockNotification(product);
+      } catch (notifErr) {
+        console.error('Error creating low stock notification:', notifErr);
+        
+      }
+    }
 
-    res.json(productResult.rows[0]);
+    res.json(product);
   } catch (err) {
     console.error('Error updating product:', err);
     res.status(500).json({ message: 'Error updating product', error: err.message });
@@ -409,6 +528,17 @@ exports.updateStock = async (req, res) => {
         'UPDATE products SET stock_quantity = $1, updated_at = NOW() WHERE id = $2 RETURNING *',
         [newQuantity, id]
       );
+      
+      
+      const updatedProduct = updateResult.rows[0];
+      if (updatedProduct.stock_quantity <= updatedProduct.min_stock_level) {
+        try {
+          await triggerNotifications.lowStockNotification(updatedProduct);
+        } catch (notifErr) {
+          console.error('Error creating low stock notification:', notifErr);
+          
+        }
+      }
 
       await query('COMMIT');
 
@@ -468,5 +598,65 @@ exports.getStockMovements = async (req, res) => {
   } catch (err) {
     console.error('Error fetching stock movements:', err);
     res.status(500).json({ message: 'Error fetching stock movements', error: err.message });
+  }
+};
+
+/**
+ * Upload a product image and return the URL
+ * @route POST /api/products/upload-image
+ */
+exports.uploadProductImage = async (req, res) => {
+  try {
+    if (!req.files || Object.keys(req.files).length === 0 || !req.files.image) {
+      return res.status(400).json({ message: 'No image file was uploaded' });
+    }
+    
+    const imageFile = req.files.image;
+    
+    
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+    if (!allowedTypes.includes(imageFile.mimetype)) {
+      return res.status(400).json({ message: 'Only JPEG, PNG, GIF, and WEBP images are allowed' });
+    }
+    
+    
+    const maxSize = 5 * 1024 * 1024; 
+    if (imageFile.size > maxSize) {
+      return res.status(400).json({ message: 'Image size should be less than 5MB' });
+    }
+    
+    
+    const timestamp = Date.now();
+    const fileExtension = imageFile.name.split('.').pop();
+    const fileName = `product_${timestamp}.${fileExtension}`;
+    
+    
+    const uploadPath = path.join(__dirname, '..', 'public', 'uploads', 'products');
+    
+    
+    if (!fs.existsSync(uploadPath)) {
+      fs.mkdirSync(uploadPath, { recursive: true });
+    }
+    
+    const filePath = `${uploadPath}/${fileName}`;
+    
+    
+    await imageFile.mv(filePath);
+    
+    
+    const imageUrl = `/uploads/products/${fileName}`;
+    
+    
+    const baseUrl = process.env.API_BASE_URL || `http://localhost:${process.env.PORT || 5001}`;
+    const fullImageUrl = `${baseUrl}${imageUrl}`;
+    
+    res.json({
+      message: 'Image uploaded successfully',
+      imageUrl: imageUrl, 
+      fullImageUrl: fullImageUrl 
+    });
+  } catch (err) {
+    console.error('Error uploading product image:', err);
+    res.status(500).json({ message: 'Error uploading product image', error: err.message });
   }
 }; 

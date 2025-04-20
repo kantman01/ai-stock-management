@@ -14,6 +14,7 @@ import {
   DialogTitle,
   Divider,
   FormControl,
+  FormHelperText,
   Grid,
   IconButton,
   InputAdornment,
@@ -34,7 +35,9 @@ import {
   Typography,
   CircularProgress,
   Alert,
-  Snackbar
+  Snackbar,
+  Avatar,
+  LinearProgress
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -43,8 +46,11 @@ import {
   Delete as DeleteIcon,
   FilterList as FilterListIcon,
   Refresh as RefreshIcon,
-  Clear as ClearIcon
+  Clear as ClearIcon,
+  Image as ImageIcon,
+  CloudUpload as CloudUploadIcon
 } from '@mui/icons-material';
+import { useNavigate } from 'react-router-dom';
 
 import {
   fetchStockStart,
@@ -57,12 +63,18 @@ import {
 } from '../../redux/slices/stockSlice';
 
 import api from '../../services/api';
+import { productApiUtils } from '../../utils/apiUtils';
 
 const Products = () => {
   const dispatch = useDispatch();
   const { items, filteredItems, isLoading, error, searchTerm, filters } = useSelector(state => state.stock);
+  const { user } = useSelector(state => state.auth);
+  const isSupplier = user?.role?.code === 'supplier';
+  const isCustomer = user?.role?.code === 'customer';
+  const navigate = useNavigate();
 
   const [categories, setCategories] = useState([]);
+  const [suppliers, setSuppliers] = useState([]);
   const [loading, setLoading] = useState(false);
   const [apiError, setApiError] = useState(null);
   const [totalCount, setTotalCount] = useState(0);
@@ -84,13 +96,25 @@ const Products = () => {
     sku: '',
     barcode: '',
     category_id: '',
+    supplier_id: '',
     price: 0,
     cost_price: 0,
     tax_rate: 0,
     stock_quantity: 0,
     min_stock_quantity: 0,
-    is_active: true
+    is_active: true,
+    image_url: ''
   });
+
+  
+  const [imageFile, setImageFile] = useState(null);
+  const [imagePreview, setImagePreview] = useState('');
+  const [uploadProgress, setUploadProgress] = useState(0);
+
+  
+  const [orderDialogOpen, setOrderDialogOpen] = useState(false);
+  const [selectedProductForOrder, setSelectedProductForOrder] = useState(null);
+  const [orderQuantity, setOrderQuantity] = useState(1);
 
   useEffect(() => {
     const fetchCategories = async () => {
@@ -107,7 +131,22 @@ const Products = () => {
       }
     };
 
+    const fetchSuppliers = async () => {
+      try {
+        const response = await api.get('/suppliers', {
+          params: {
+            is_active: true
+          }
+        });
+        setSuppliers(response.data.data);
+      } catch (error) {
+        console.error('Error fetching suppliers:', error);
+        setApiError('Suppliers could not be loaded');
+      }
+    };
+
     fetchCategories();
+    fetchSuppliers();
   }, []);
 
   useEffect(() => {
@@ -116,18 +155,22 @@ const Products = () => {
       dispatch(fetchStockStart());
 
       try {
-        const response = await api.get('/products', {
-          params: {
-            limit: rowsPerPage,
-            offset: page * rowsPerPage,
-            search: searchTerm || undefined,
-            category_id: filters.category !== 'all' ? filters.category : undefined,
-            min_stock: filters.inStock === 'inStock' ? 1 : undefined,
-            max_stock: filters.inStock === 'outOfStock' ? 0 : undefined,
-            sort_by: 'name',
-            sort_dir: 'ASC'
-          }
-        });
+        
+        const baseParams = {
+          limit: rowsPerPage,
+          offset: page * rowsPerPage,
+          search: searchTerm || undefined,
+          category_id: filters.category !== 'all' ? filters.category : undefined,
+          min_stock: filters.inStock === 'inStock' ? 1 : undefined,
+          max_stock: filters.inStock === 'outOfStock' ? 0 : undefined,
+          sort_by: 'name',
+          sort_dir: 'ASC'
+        };
+
+        
+        const params = productApiUtils.getListParams(baseParams);
+
+        const response = await api.get('/products', { params });
 
         dispatch(fetchStockSuccess(response.data.data));
         setTotalCount(response.data.pagination.total);
@@ -142,7 +185,7 @@ const Products = () => {
     };
 
     fetchProducts();
-  }, [dispatch, page, rowsPerPage, searchTerm, filters]);
+  }, [dispatch, page, rowsPerPage, searchTerm, filters, user]);
 
   const handleChangePage = (event, newPage) => {
     setPage(newPage);
@@ -209,23 +252,45 @@ const Products = () => {
   };
 
   const handleAddClick = () => {
+    
+    const initialSupplier = isSupplier && user.supplierId ? user.supplierId : '';
+    
     setFormData({
       name: '',
       description: '',
       sku: '',
       barcode: '',
       category_id: '',
+      supplier_id: initialSupplier,
       price: 0,
       cost_price: 0,
       tax_rate: 0,
       stock_quantity: 0,
       min_stock_quantity: 0,
-      is_active: true
+      is_active: true,
+      image_url: ''
     });
     setAddDialogOpen(true);
   };
 
+  const getImageUrl = (imagePath) => {
+    const apiBaseUrl = process.env.REACT_APP_API_URL || 'http://localhost:5001';
+    
+    if (!imagePath) return null;
+    
+    
+    if (imagePath.startsWith('http://') || imagePath.startsWith('https://')) {
+      return imagePath;
+    }
+    
+    
+    return `${apiBaseUrl}${imagePath}`;
+  };
+
   const handleEditClick = (item) => {
+    
+    const supplierId = isSupplier && user.supplierId ? user.supplierId : (item.supplier_id || '');
+    
     setFormData({
       id: item.id,
       name: item.name || '',
@@ -233,13 +298,23 @@ const Products = () => {
       sku: item.sku || '',
       barcode: item.barcode || '',
       category_id: item.category_id || '',
+      supplier_id: supplierId,
       price: item.price || 0,
       cost_price: item.cost_price || 0,
       tax_rate: item.tax_rate || 0,
       stock_quantity: item.stock_quantity || 0,
       min_stock_quantity: item.min_stock_quantity || 0,
-      is_active: item.is_active
+      is_active: item.is_active,
+      image_url: item.image_url || ''
     });
+    
+    
+    if (item.image_url) {
+      setImagePreview(getImageUrl(item.image_url));
+    } else {
+      setImagePreview('');
+    }
+    
     setEditDialogOpen(true);
   };
 
@@ -255,10 +330,94 @@ const Products = () => {
     });
   };
 
+  
+  const handleImageChange = (e) => {
+    if (e.target.files && e.target.files[0]) {
+      const file = e.target.files[0];
+      
+      
+      const validTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+      if (!validTypes.includes(file.type)) {
+        setApiError('Only JPEG, PNG, GIF and WEBP images are allowed');
+        return;
+      }
+      
+      
+      if (file.size > 5 * 1024 * 1024) {
+        setApiError('Image size should be less than 5MB');
+        return;
+      }
+      
+      setImageFile(file);
+      setImagePreview(URL.createObjectURL(file));
+      setApiError(null);
+    }
+  };
+
+  
+  const uploadImage = async (file) => {
+    if (!file) return null;
+    
+    const formData = new FormData();
+    
+    formData.append('image', file);
+    
+    try {
+      
+      const config = {
+        headers: {
+          'Content-Type': 'multipart/form-data'
+        },
+        onUploadProgress: (progressEvent) => {
+          const percentCompleted = Math.round((progressEvent.loaded * 100) / progressEvent.total);
+          setUploadProgress(percentCompleted);
+        }
+      };
+      
+      const response = await api.post('/products/upload-image', formData, config);
+      setUploadProgress(0);
+      return response.data.fullImageUrl;
+    } catch (error) {
+      console.error('Error uploading image:', error);
+      setApiError('Failed to upload image: ' + (error.response?.data?.message || error.message));
+      setUploadProgress(0);
+      return null;
+    }
+  };
+
   const handleAddSubmit = async () => {
+    
+    if (!formData.name || formData.price <= 0) {
+      setApiError('Please fill in required fields.');
+      return;
+    }
+    
+    if (!isSupplier && !formData.supplier_id) {
+      setApiError('Selecting a supplier is required.');
+      return;
+    }
+    
     setLoading(true);
     try {
-      const response = await api.post('/products', formData);
+      
+      let imageUrl = formData.image_url;
+      
+      if (imageFile) {
+        imageUrl = await uploadImage(imageFile);
+        if (!imageUrl) {
+          setApiError('Failed to upload product image');
+          setLoading(false);
+          return;
+        }
+      }
+      
+      
+      const productData = {
+        ...formData,
+        image_url: imageUrl
+      };
+      
+      const response = await api.post('/products', productData);
 
       dispatch(fetchStockSuccess([...items, response.data]));
 
@@ -267,10 +426,15 @@ const Products = () => {
         message: 'Product added successfully',
         severity: 'success'
       });
+      
+      
+      setImageFile(null);
+      setImagePreview('');
+      
       setAddDialogOpen(false);
     } catch (error) {
       console.error('Error adding product:', error);
-      setApiError('Product could not be added');
+      setApiError(error.response?.data?.message || 'Product could not be added');
       setNotification({
         open: true,
         message: 'Error adding product',
@@ -282,9 +446,38 @@ const Products = () => {
   };
 
   const handleEditSubmit = async () => {
+    
+    if (!formData.name || formData.price <= 0) {
+      setApiError('Please fill in required fields.');
+      return;
+    }
+    
+    if (!isSupplier && !formData.supplier_id) {
+      setApiError('Selecting a supplier is required.');
+      return;
+    }
+    
     setLoading(true);
     try {
-      const response = await api.put(`/products/${formData.id}`, formData);
+      
+      let imageUrl = formData.image_url;
+      
+      if (imageFile) {
+        imageUrl = await uploadImage(imageFile);
+        if (!imageUrl) {
+          setApiError('Failed to upload product image');
+          setLoading(false);
+          return;
+        }
+      }
+      
+      
+      const productData = {
+        ...formData,
+        image_url: imageUrl
+      };
+      
+      const response = await api.put(`/products/${formData.id}`, productData);
 
       dispatch(fetchStockSuccess(
         items.map(item => item.id === formData.id ? response.data : item)
@@ -295,10 +488,15 @@ const Products = () => {
         message: 'Product updated successfully',
         severity: 'success'
       });
+      
+      
+      setImageFile(null);
+      setImagePreview('');
+      
       setEditDialogOpen(false);
     } catch (error) {
       console.error('Error updating product:', error);
-      setApiError('Product could not be updated');
+      setApiError(error.response?.data?.message || 'Product could not be updated');
       setNotification({
         open: true,
         message: 'Error updating product',
@@ -312,6 +510,10 @@ const Products = () => {
   const handleDialogClose = () => {
     setEditDialogOpen(false);
     setAddDialogOpen(false);
+    
+    setImageFile(null);
+    setImagePreview('');
+    setUploadProgress(0);
   };
 
   const handleNotificationClose = () => {
@@ -327,11 +529,76 @@ const Products = () => {
     return 'success';
   };
 
+  const renderHeader = () => {
+    return (
+      <Box sx={{ mb: 3 }}>
+        <Typography variant="h4" gutterBottom>
+          {isSupplier ? 'My Products' : 'Products Management'}
+        </Typography>
+        <Typography variant="body1" color="text.secondary">
+          {isSupplier 
+            ? 'View and manage your products in the inventory'
+            : 'View and manage all products in the inventory'
+          }
+        </Typography>
+      </Box>
+    );
+  };
+
+  const handleOrderClick = (product) => {
+    setSelectedProductForOrder(product);
+    setOrderQuantity(1);
+    setOrderDialogOpen(true);
+  };
+  
+  const handleCloseOrderDialog = () => {
+    setOrderDialogOpen(false);
+    setSelectedProductForOrder(null);
+  };
+  
+  const handleCreateOrder = async () => {
+    try {
+      if (!selectedProductForOrder) return;
+      
+      
+      const orderData = {
+        customer_id: user.customerId,
+        items: [
+          {
+            product_id: selectedProductForOrder.id,
+            quantity: orderQuantity
+          }
+        ],
+        notes: `Order created from product page for ${selectedProductForOrder.name}`
+      };
+      
+      const response = await api.post('/orders', orderData);
+      
+      
+      setOrderDialogOpen(false);
+      setNotification({
+        open: true,
+        message: 'Order created successfully',
+        severity: 'success'
+      });
+      
+      
+      if (response.data && response.data.id) {
+        navigate(`/orders/${response.data.id}`);
+      }
+    } catch (error) {
+      console.error('Error creating order:', error);
+      setNotification({
+        open: true,
+        message: `Failed to create order: ${error.response?.data?.message || error.message}`,
+        severity: 'error'
+      });
+    }
+  };
+
   return (
     <Box sx={{ p: 3 }}>
-      <Typography variant="h4" component="h1" gutterBottom>
-        Product Management
-      </Typography>
+      {renderHeader()}
 
       <Paper
         elevation={0}
@@ -414,16 +681,18 @@ const Products = () => {
               Clear
             </Button>
 
-            <Button
-              variant="contained"
-              color="primary"
-              startIcon={<AddIcon />}
-              onClick={handleAddClick}
-              size="medium"
-              sx={{ flex: 1 }}
-            >
-              Add Product
-            </Button>
+            {!isCustomer && (
+              <Button
+                variant="contained"
+                color="primary"
+                startIcon={<AddIcon />}
+                onClick={handleAddClick}
+                size="medium"
+                sx={{ flex: 1 }}
+              >
+                Add Product
+              </Button>
+            )}
           </Grid>
         </Grid>
       </Paper>
@@ -438,6 +707,7 @@ const Products = () => {
             <Table sx={{ minWidth: 650 }}>
               <TableHead>
                 <TableRow>
+                  <TableCell>Image</TableCell>
                   <TableCell>Product Name</TableCell>
                   <TableCell>SKU</TableCell>
                   <TableCell>Category</TableCell>
@@ -450,19 +720,19 @@ const Products = () => {
               <TableBody>
                 {loading ? (
                   <TableRow>
-                    <TableCell colSpan={7} align="center">
+                    <TableCell colSpan={8} align="center">
                       <CircularProgress size={40} sx={{ my: 2 }} />
                     </TableCell>
                   </TableRow>
                 ) : error ? (
                   <TableRow>
-                    <TableCell colSpan={7} align="center" sx={{ color: 'error.main' }}>
+                    <TableCell colSpan={8} align="center" sx={{ color: 'error.main' }}>
                       Error: {error}
                     </TableCell>
                   </TableRow>
                 ) : items.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={7} align="center">
+                    <TableCell colSpan={8} align="center">
                       {searchTerm || filters.category !== 'all' || filters.inStock !== 'all'
                         ? 'No products match your search criteria.'
                         : 'No products have been added yet.'}
@@ -471,6 +741,27 @@ const Products = () => {
                 ) : (
                   items.map((item) => (
                     <TableRow key={item.id}>
+                      <TableCell>
+                        {item.image_url ? (
+                          <Avatar
+                            src={getImageUrl(item.image_url)}
+                            alt={item.name}
+                            variant="rounded"
+                            sx={{ width: 50, height: 50 }}
+                            onError={(e) => {
+                              e.target.onerror = null; 
+                              e.target.src = '/placeholder-image.jpg';
+                            }}
+                          />
+                        ) : (
+                          <Avatar 
+                            variant="rounded" 
+                            sx={{ width: 50, height: 50, bgcolor: 'grey.200' }}
+                          >
+                            <ImageIcon color="disabled" />
+                          </Avatar>
+                        )}
+                      </TableCell>
                       <TableCell component="th" scope="row">
                         {item.name}
                       </TableCell>
@@ -494,24 +785,37 @@ const Products = () => {
                       </TableCell>
                       <TableCell align="center">
                         <Box sx={{ display: 'flex', justifyContent: 'center' }}>
-                          <Tooltip title="Edit">
-                            <IconButton
-                              size="small"
+                          {isCustomer ? (
+                            <Button
+                              variant="contained"
                               color="primary"
-                              onClick={() => handleEditClick(item)}
-                            >
-                              <EditIcon fontSize="small" />
-                            </IconButton>
-                          </Tooltip>
-                          <Tooltip title="Delete">
-                            <IconButton
                               size="small"
-                              color="error"
-                              onClick={() => handleDeleteClick(item)}
+                              onClick={() => handleOrderClick(item)}
                             >
-                              <DeleteIcon fontSize="small" />
-                            </IconButton>
-                          </Tooltip>
+                              Order
+                            </Button>
+                          ) : (
+                            <>
+                              <Tooltip title="Edit">
+                                <IconButton
+                                  size="small"
+                                  color="primary"
+                                  onClick={() => handleEditClick(item)}
+                                >
+                                  <EditIcon fontSize="small" />
+                                </IconButton>
+                              </Tooltip>
+                              <Tooltip title="Delete">
+                                <IconButton
+                                  size="small"
+                                  color="error"
+                                  onClick={() => handleDeleteClick(item)}
+                                >
+                                  <DeleteIcon fontSize="small" />
+                                </IconButton>
+                              </Tooltip>
+                            </>
+                          )}
                         </Box>
                       </TableCell>
                     </TableRow>
@@ -573,6 +877,91 @@ const Products = () => {
         <DialogContent>
           <Box component="form" sx={{ mt: 2 }}>
             <Grid container spacing={2}>
+              {/* Image upload section */}
+              <Grid item xs={12}>
+                <Typography variant="subtitle2" gutterBottom>
+                  Product Image
+                </Typography>
+                <Box 
+                  sx={{ 
+                    display: 'flex',
+                    flexDirection: { xs: 'column', sm: 'row' },
+                    alignItems: 'center',
+                    gap: 2,
+                    mb: 2 
+                  }}
+                >
+                  {/* Image preview */}
+                  <Box 
+                    sx={{ 
+                      width: 100, 
+                      height: 100, 
+                      border: '1px dashed grey', 
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      borderRadius: 1,
+                      overflow: 'hidden',
+                      bgcolor: 'grey.50'
+                    }}
+                  >
+                    {imagePreview ? (
+                      <img 
+                        src={imagePreview} 
+                        alt="Product preview" 
+                        style={{ width: '100%', height: '100%', objectFit: 'cover' }} 
+                        onError={(e) => {
+                          e.target.onerror = null; 
+                          e.target.src = '/placeholder-image.jpg';
+                        }}
+                      />
+                    ) : (
+                      <ImageIcon color="disabled" sx={{ fontSize: 40 }} />
+                    )}
+                  </Box>
+                  
+                  {/* Upload button and info */}
+                  <Box sx={{ flex: 1 }}>
+                    <Button
+                      variant="outlined"
+                      component="label"
+                      startIcon={<CloudUploadIcon />}
+                      sx={{ mb: 1 }}
+                    >
+                      Upload Image
+                      <input
+                        type="file"
+                        hidden
+                        accept="image/jpeg, image/png, image/gif, image/webp"
+                        onChange={handleImageChange}
+                      />
+                    </Button>
+                    
+                    <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1 }}>
+                      Supported formats: JPEG, PNG, GIF, WEBP. Max size: 5MB
+                    </Typography>
+                    
+                    {uploadProgress > 0 && (
+                      <Box sx={{ width: '100%', mt: 1, mb: 1 }}>
+                        <LinearProgress variant="determinate" value={uploadProgress} />
+                      </Box>
+                    )}
+                    
+                    <TextField
+                      fullWidth
+                      label="Image URL"
+                      name="image_url"
+                      value={formData.image_url}
+                      onChange={handleInputChange}
+                      size="small"
+                      sx={{ mt: 1 }}
+                      helperText="Enter a URL or upload an image"
+                    />
+                  </Box>
+                </Box>
+              </Grid>
+              
+              {/* Product Name */}
               <Grid item xs={12} sm={6}>
                 <TextField
                   fullWidth
@@ -583,6 +972,8 @@ const Products = () => {
                   onChange={handleInputChange}
                 />
               </Grid>
+              
+              {/* Category */}
               <Grid item xs={12} sm={6}>
                 <FormControl fullWidth required>
                   <InputLabel>Category</InputLabel>
@@ -600,6 +991,33 @@ const Products = () => {
                   </Select>
                 </FormControl>
               </Grid>
+              
+              {/* Supplier - only show if not a supplier user */}
+              {!isSupplier && (
+                <Grid item xs={12}>
+                  <FormControl fullWidth required>
+                    <InputLabel>Supplier</InputLabel>
+                    <Select
+                      name="supplier_id"
+                      value={formData.supplier_id}
+                      label="Supplier"
+                      onChange={handleInputChange}
+                      error={!formData.supplier_id}
+                    >
+                      <MenuItem value="">Select a supplier</MenuItem>
+                      {suppliers.map((supplier) => (
+                        <MenuItem key={supplier.id} value={supplier.id}>
+                          {supplier.name}
+                        </MenuItem>
+                      ))}
+                    </Select>
+                    {!formData.supplier_id && (
+                      <FormHelperText error>Supplier is required</FormHelperText>
+                    )}
+                  </FormControl>
+                </Grid>
+              )}
+              
               <Grid item xs={12} sm={6}>
                 <TextField
                   fullWidth
@@ -717,7 +1135,7 @@ const Products = () => {
             onClick={handleAddSubmit}
             color="primary"
             variant="contained"
-            disabled={loading || !formData.name || formData.price <= 0}
+            disabled={loading || !formData.name || formData.price <= 0 || (!isSupplier && !formData.supplier_id)}
           >
             {loading ? <CircularProgress size={24} /> : "Add Product"}
           </Button>
@@ -734,6 +1152,91 @@ const Products = () => {
         <DialogContent>
           <Box component="form" sx={{ mt: 2 }}>
             <Grid container spacing={2}>
+              {/* Image upload section */}
+              <Grid item xs={12}>
+                <Typography variant="subtitle2" gutterBottom>
+                  Product Image
+                </Typography>
+                <Box 
+                  sx={{ 
+                    display: 'flex',
+                    flexDirection: { xs: 'column', sm: 'row' },
+                    alignItems: 'center',
+                    gap: 2,
+                    mb: 2 
+                  }}
+                >
+                  {/* Image preview */}
+                  <Box 
+                    sx={{ 
+                      width: 100, 
+                      height: 100, 
+                      border: '1px dashed grey', 
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      borderRadius: 1,
+                      overflow: 'hidden',
+                      bgcolor: 'grey.50'
+                    }}
+                  >
+                    {imagePreview ? (
+                      <img 
+                        src={imagePreview} 
+                        alt="Product preview" 
+                        style={{ width: '100%', height: '100%', objectFit: 'cover' }} 
+                        onError={(e) => {
+                          e.target.onerror = null; 
+                          e.target.src = '/placeholder-image.jpg';
+                        }}
+                      />
+                    ) : (
+                      <ImageIcon color="disabled" sx={{ fontSize: 40 }} />
+                    )}
+                  </Box>
+                  
+                  {/* Upload button and info */}
+                  <Box sx={{ flex: 1 }}>
+                    <Button
+                      variant="outlined"
+                      component="label"
+                      startIcon={<CloudUploadIcon />}
+                      sx={{ mb: 1 }}
+                    >
+                      Upload Image
+                      <input
+                        type="file"
+                        hidden
+                        accept="image/jpeg, image/png, image/gif, image/webp"
+                        onChange={handleImageChange}
+                      />
+                    </Button>
+                    
+                    <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1 }}>
+                      Supported formats: JPEG, PNG, GIF, WEBP. Max size: 5MB
+                    </Typography>
+                    
+                    {uploadProgress > 0 && (
+                      <Box sx={{ width: '100%', mt: 1, mb: 1 }}>
+                        <LinearProgress variant="determinate" value={uploadProgress} />
+                      </Box>
+                    )}
+                    
+                    <TextField
+                      fullWidth
+                      label="Image URL"
+                      name="image_url"
+                      value={formData.image_url}
+                      onChange={handleInputChange}
+                      size="small"
+                      sx={{ mt: 1 }}
+                      helperText="Enter a URL or upload an image"
+                    />
+                  </Box>
+                </Box>
+              </Grid>
+              
+              {/* Product Name */}
               <Grid item xs={12} sm={6}>
                 <TextField
                   fullWidth
@@ -744,6 +1247,8 @@ const Products = () => {
                   onChange={handleInputChange}
                 />
               </Grid>
+              
+              {/* Category */}
               <Grid item xs={12} sm={6}>
                 <FormControl fullWidth required>
                   <InputLabel>Category</InputLabel>
@@ -761,6 +1266,33 @@ const Products = () => {
                   </Select>
                 </FormControl>
               </Grid>
+              
+              {/* Supplier - only show if not a supplier user */}
+              {!isSupplier && (
+                <Grid item xs={12}>
+                  <FormControl fullWidth required>
+                    <InputLabel>Supplier</InputLabel>
+                    <Select
+                      name="supplier_id"
+                      value={formData.supplier_id}
+                      label="Supplier"
+                      onChange={handleInputChange}
+                      error={!formData.supplier_id}
+                    >
+                      <MenuItem value="">Select a supplier</MenuItem>
+                      {suppliers.map((supplier) => (
+                        <MenuItem key={supplier.id} value={supplier.id}>
+                          {supplier.name}
+                        </MenuItem>
+                      ))}
+                    </Select>
+                    {!formData.supplier_id && (
+                      <FormHelperText error>Supplier is required</FormHelperText>
+                    )}
+                  </FormControl>
+                </Grid>
+              )}
+              
               <Grid item xs={12} sm={6}>
                 <TextField
                   fullWidth
@@ -868,7 +1400,7 @@ const Products = () => {
             onClick={handleEditSubmit}
             color="primary"
             variant="contained"
-            disabled={loading || !formData.name || formData.price <= 0}
+            disabled={loading || !formData.name || formData.price <= 0 || (!isSupplier && !formData.supplier_id)}
           >
             {loading ? <CircularProgress size={24} /> : "Save Changes"}
           </Button>
@@ -888,6 +1420,49 @@ const Products = () => {
           {notification.message}
         </Alert>
       </Snackbar>
+
+      {/* Add Order Dialog */}
+      <Dialog open={orderDialogOpen} onClose={handleCloseOrderDialog}>
+        <DialogTitle>Create Order</DialogTitle>
+        <DialogContent>
+          {selectedProductForOrder && (
+            <>
+              <Typography variant="h6">
+                {selectedProductForOrder.name}
+              </Typography>
+              <Typography variant="body2" color="textSecondary" gutterBottom>
+                SKU: {selectedProductForOrder.sku}
+              </Typography>
+              <Typography variant="body1">
+                Price: ${selectedProductForOrder.price}
+              </Typography>
+              <TextField
+                margin="dense"
+                label="Quantity"
+                type="number"
+                fullWidth
+                value={orderQuantity}
+                onChange={(e) => setOrderQuantity(Math.max(1, parseInt(e.target.value) || 1))}
+                inputProps={{ min: 1 }}
+                required
+              />
+              <Typography variant="body1" sx={{ mt: 2 }}>
+                Total: ${(selectedProductForOrder.price * orderQuantity).toFixed(2)}
+              </Typography>
+            </>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleCloseOrderDialog}>Cancel</Button>
+          <Button 
+            onClick={handleCreateOrder} 
+            variant="contained" 
+            color="primary"
+          >
+            Place Order
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 };
