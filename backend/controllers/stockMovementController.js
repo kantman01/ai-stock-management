@@ -19,13 +19,11 @@ exports.getStockMovements = async (req, res) => {
     } = req.query;
 
     let sql = `
-      SELECT sm.*, 
-        p.name as product_name, 
-        u.first_name, 
-        u.last_name
+      SELECT sm.*, p.name as product_name, u.first_name, u.last_name, s.name as supplier_name
       FROM stock_movements sm
       LEFT JOIN products p ON sm.product_id = p.id
       LEFT JOIN users u ON sm.created_by = u.id
+      LEFT JOIN suppliers s ON p.supplier_id = s.id
       WHERE 1=1
     `;
 
@@ -56,7 +54,7 @@ exports.getStockMovements = async (req, res) => {
       params.push(`%${search}%`);
     }
 
-    const countSql = sql.replace('SELECT sm.*, p.name as product_name, u.first_name, u.last_name', 'SELECT COUNT(*)');
+    const countSql = sql.replace('SELECT sm.*, p.name as product_name, u.first_name, u.last_name, s.name as supplier_name', 'SELECT COUNT(*)');
     const countResult = await query(countSql, params);
     const total = parseInt(countResult.rows[0].count);
 

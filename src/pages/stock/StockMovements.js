@@ -359,6 +359,7 @@ const StockMovements = () => {
                 <TableRow>
                   <TableCell>Transaction</TableCell>
                   <TableCell>Product</TableCell>
+                  <TableCell>Supplier</TableCell>
                   <TableCell align="center">Quantity</TableCell>
                   <TableCell align="center">Previous Quantity</TableCell>
                   <TableCell align="center">New Quantity</TableCell>
@@ -375,6 +376,9 @@ const StockMovements = () => {
                     </TableCell>
                     <TableCell>
                       {movement.product_name}
+                    </TableCell>
+                    <TableCell>
+                      {movement.supplier_name}
                     </TableCell>
                     <TableCell align="center">
                       {movement.quantity}

@@ -52,7 +52,7 @@ async function testAISupplierSelection() {
       SELECT p.id, p.name, p.preferred_supplier_id, s.name AS preferred_supplier_name
       FROM products p
       LEFT JOIN suppliers s ON p.preferred_supplier_id = s.id
-      WHERE p.id = $1
+      WHERE p.id = $1 and p.is_active = true
     `, [recommendations.restock_recommendations[0].product_id]);
     
     if (productResult.rows.length > 0) {

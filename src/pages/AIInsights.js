@@ -50,6 +50,10 @@ import {
   CheckCircle,
   Done,
   Settings,
+  Repeat as RepeatIcon,
+  Person as PersonIcon,
+  CalendarToday as CalendarTodayIcon,
+  TrendingUp as TrendingUpIcon
 } from '@mui/icons-material';
 import { Line, Bar, Pie } from 'react-chartjs-2';
 import { hasPermission } from '../utils/permissions';
@@ -315,7 +319,7 @@ const AIInsights = () => {
       else if (stockPredictions.predictions.products && Array.isArray(stockPredictions.predictions.products)) {
         predictionsArray = stockPredictions.predictions.products.map(product => ({
           ...product,
-          current_stock: product.stock_quantity || 'N/A'
+          current_stock: product.stock_quantity || product.current_stock || 0
         }));
       }
       
@@ -336,10 +340,16 @@ const AIInsights = () => {
 
     
     predictionsArray = predictionsArray.map(prediction => {
-      if (!prediction.current_stock && prediction.stock_quantity) {
-        return { ...prediction, current_stock: prediction.stock_quantity };
-      }
-      return prediction;
+      const currentStock = prediction.stock_quantity !== undefined ? prediction.stock_quantity : 
+                           prediction.current_stock !== undefined ? prediction.current_stock : 0;
+      
+      const normalizedStock = typeof currentStock === 'number' ? currentStock : 
+                             typeof currentStock === 'string' ? parseInt(currentStock, 10) || 0 : 0;
+      
+      return { 
+        ...prediction, 
+        current_stock: normalizedStock
+      };
     });
 
     if (!predictionsArray || predictionsArray.length === 0) {
@@ -430,15 +440,19 @@ const AIInsights = () => {
                         <Stack spacing={1}>
                           <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
                             <Typography variant="body2" color="text.secondary">Current Stock:</Typography>
-                            <Typography variant="body2" fontWeight="bold">{prediction.current_stock || 'N/A'}</Typography>
+                            <Typography variant="body2" fontWeight="bold">
+                              {prediction.current_stock !== undefined && prediction.current_stock !== null 
+                                ? prediction.current_stock.toString()
+                                : '0'}
+                            </Typography>
                           </Box>
                           <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
                             <Typography variant="body2" color="text.secondary">Recommended Order:</Typography>
-                            <Typography variant="body2" fontWeight="bold">{prediction.recommended_order_quantity || 'N/A'}</Typography>
+                            <Typography variant="body2" fontWeight="bold">{prediction.recommended_order_quantity || '0'}</Typography>
                           </Box>
                           <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
                             <Typography variant="body2" color="text.secondary">Min Stock Level:</Typography>
-                            <Typography variant="body2" fontWeight="bold">{prediction.minimum_stock_level || 'N/A'}</Typography>
+                            <Typography variant="body2" fontWeight="bold">{prediction.minimum_stock_level || '0'}</Typography>
                           </Box>
                         </Stack>
                       </Paper>
@@ -649,7 +663,7 @@ const AIInsights = () => {
                 <Divider />
                 <CardContent>
                   <Grid container spacing={2}>
-                    <Grid item xs={12} md={8}>
+                    <Grid item xs={12} md={7}>
                       <Typography variant="h6" gutterBottom>
                         Sales Forecast
                       </Typography>
@@ -683,17 +697,65 @@ const AIInsights = () => {
                         <Alert severity="info">No forecast data available</Alert>
                       )}
                     </Grid>
-                    <Grid item xs={12} md={4}>
+                    <Grid item xs={12} md={5}>
                       <Typography variant="h6" gutterBottom>
                         Seasonal Factors
                       </Typography>
-                      <Paper variant="outlined" sx={{ p: 2 }}>
+                      <Paper variant="outlined" sx={{ p: 2, mb: 3 }}>
                         <Typography variant="body2">
                           {forecast.seasonal_factors || 'No seasonal factors identified.'}
                         </Typography>
                       </Paper>
                       
-                      <Typography variant="h6" sx={{ mt: 3 }} gutterBottom>
+                      {/* Enhanced Recurring Orders Section */}
+                      {forecast.recurring_order_patterns && forecast.recurring_order_patterns.length > 0 && (
+                        <>
+                          <Typography variant="h6" gutterBottom sx={{ mt: 2, color: 'primary.main' }}>
+                            <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                              <RepeatIcon sx={{ mr: 1 }} />
+                              Recurring Orders
+                            </Box>
+                          </Typography>
+                          <Paper 
+                            variant="outlined" 
+                            sx={{ 
+                              p: 2, 
+                              mb: 3, 
+                              bgcolor: 'primary.light', 
+                              color: 'primary.contrastText',
+                              borderLeft: '4px solid',
+                              borderColor: 'primary.main'
+                            }}
+                          >
+                            {forecast.recurring_order_patterns.map((pattern, i) => (
+                              <Box key={i} sx={{ mb: i < forecast.recurring_order_patterns.length - 1 ? 2 : 0 }}>
+                                <Typography variant="subtitle2" sx={{ display: 'flex', alignItems: 'center' }}>
+                                  <PersonIcon sx={{ mr: 0.5, fontSize: '0.9rem' }} />
+                                  {pattern.customer_name || 'Customer'} 
+                                </Typography>
+                                <Typography variant="body2" sx={{ display: 'flex', alignItems: 'center', ml: 2 }}>
+                                  <CalendarTodayIcon sx={{ mr: 0.5, fontSize: '0.9rem' }} />
+                                  Orders every {pattern.frequency || 'month'} 
+                                  {pattern.day_of_month ? ` around day ${pattern.day_of_month}` : ''}
+                                </Typography>
+                                {pattern.continuation_likelihood && (
+                                  <Typography variant="body2" sx={{ mt: 0.5, ml: 2, display: 'flex', alignItems: 'center' }}>
+                                    <TrendingUpIcon sx={{ mr: 0.5, fontSize: '0.9rem' }} />
+                                    {pattern.continuation_likelihood} likelihood to continue
+                                  </Typography>
+                                )}
+                                {pattern.order_history && (
+                                  <Typography variant="body2" sx={{ mt: 0.5, ml: 2, fontSize: '0.75rem', opacity: 0.8 }}>
+                                    History: {pattern.order_history}
+                                  </Typography>
+                                )}
+                              </Box>
+                            ))}
+                          </Paper>
+                        </>
+                      )}
+                      
+                      <Typography variant="h6" gutterBottom>
                         Projected Revenue
                       </Typography>
                       {forecast.forecasted_months && forecast.forecasted_months.length > 0 ? (

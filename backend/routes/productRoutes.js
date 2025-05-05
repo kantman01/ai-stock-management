@@ -10,6 +10,9 @@ const {
 
 router.get('/', authenticateJWT, productController.getProducts);
 
+
+router.get('/all-supplier-products', authenticateJWT, checkPermission('MANAGE_PRODUCTS'), productController.getAllSupplierProducts);
+
 router.get('/:id', authenticateJWT, productController.getProductById);
 
 router.post(

@@ -49,7 +49,7 @@ exports.getCategories = async (req, res) => {
     if (include_product_count === 'true') {
       const countPromises = result.rows.map(async (category) => {
         const countResult = await query(
-          'SELECT COUNT(*) FROM products WHERE category_id = $1',
+          'SELECT COUNT(*) FROM products WHERE category_id = $1 and is_active = true',
           [category.id]
         );
         category.product_count = parseInt(countResult.rows[0].count);
@@ -90,7 +90,7 @@ exports.getCategoryWithSubcategories = async (req, res) => {
     category.subcategories = subcategoriesResult.rows;
 
     const mainCategoryCountResult = await query(
-      'SELECT COUNT(*) FROM products WHERE category_id = $1',
+      'SELECT COUNT(*) FROM products WHERE category_id = $1 and is_active = true',
       [id]
     );
 
@@ -98,7 +98,7 @@ exports.getCategoryWithSubcategories = async (req, res) => {
 
     const subcategoryCountPromises = category.subcategories.map(async (subcat) => {
       const countResult = await query(
-        'SELECT COUNT(*) FROM products WHERE category_id = $1',
+        'SELECT COUNT(*) FROM products WHERE category_id = $1 and is_active = true',
         [subcat.id]
       );
       subcat.product_count = parseInt(countResult.rows[0].count);
@@ -317,7 +317,7 @@ exports.deleteCategory = async (req, res) => {
     }
 
     const productsResult = await query(
-      'SELECT COUNT(*) FROM products WHERE category_id = $1',
+      'SELECT COUNT(*) FROM products WHERE category_id = $1 and is_active = true',
       [id]
     );
 
@@ -429,6 +429,8 @@ exports.getCategoryProducts = async (req, res) => {
       sql += ` AND (p.name ILIKE $${params.length + 1} OR p.description ILIKE $${params.length + 1} OR p.sku ILIKE $${params.length + 1})`;
       params.push(`%${search}%`);
     }
+
+    sql += ` AND p.is_active = true`;
 
     const countSql = sql.replace('SELECT p.*, c.name as category_name', 'SELECT COUNT(*)');
     const countResult = await query(countSql, params);

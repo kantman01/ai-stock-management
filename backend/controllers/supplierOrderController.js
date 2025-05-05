@@ -382,159 +382,130 @@ exports.deleteSupplierOrder = async (req, res) => {
 };
 
 /**
- * Complete a supplier order (add items to inventory)
+ * Complete a supplier order and add items to inventory
  */
 exports.completeSupplierOrder = async (req, res) => {
   try {
     const { id } = req.params;
+    const { items } = req.body;
+    if (!req.user || !req.user.role.permissions.includes('MANAGE_INVENTORY')) {
+      return res.status(403).json({ message: 'You do not have permission to complete supplier orders' });
+    }
 
-    console.log(`[INFO] Starting completion process for supplier order ${id}`);
-
+    
     await query('BEGIN');
 
     try {
       
-      const checkResult = await query('SELECT * FROM supplier_orders WHERE id = $1', [id]);
+      const orderSql = `
+        SELECT so.*, s.name as supplier_name
+        FROM supplier_orders so
+        JOIN suppliers s ON so.supplier_id = s.id
+        WHERE so.id = $1
+      `;
+      const orderResult = await query(orderSql, [id]);
 
-      if (checkResult.rows.length === 0) {
-        console.log(`[ERROR] Order ${id} not found`);
-        return res.status(404).json({ message: 'Supplier order not found' });
+      if (orderResult.rows.length === 0) {
+        throw new Error('Supplier order not found');
       }
 
-      const order = checkResult.rows[0];
-      console.log(`[INFO] Found order ${id} with status: ${order.status}`);
+      const order = orderResult.rows[0];
 
-      
-      if (order.status !== 'delivered') {
-        console.log(`[ERROR] Order ${id} has invalid status ${order.status} for completion`);
-        return res.status(400).json({
-          message: 'Order must be in delivered status to complete'
-        });
+      if (order.status === 'completed') {
+        throw new Error('This order has already been completed');
+      }
+
+      if (order.status === 'cancelled') {
+        throw new Error('Cannot complete a cancelled order');
       }
 
       
-      const orderItemsResult = await query(`
-        SELECT soi.product_id, soi.quantity, p.stock_quantity, p.name
+      const itemsSql = `
+        SELECT soi.*, p.name as product_name, p.stock_quantity as current_stock
         FROM supplier_order_items soi
         JOIN products p ON soi.product_id = p.id
         WHERE soi.supplier_order_id = $1
-      `, [id]);
+      `;
+      const itemsResult = await query(itemsSql, [id]);
 
-      const orderItems = orderItemsResult.rows;
-      console.log(`[INFO] Found ${orderItems.length} items for order ${id}`);
-
-      if (orderItems.length === 0) {
-        console.log(`[WARNING] Order ${id} has no items to process`);
+      if (itemsResult.rows.length === 0) {
+        throw new Error('No items found in this order');
       }
+
+      const orderItems = itemsResult.rows;
 
       
       for (const item of orderItems) {
-        console.log(`[DEBUG] Processing product ID: ${item.product_id}, Name: ${item.name}`);
         
-        
-        const currentStockQuantity = parseInt(item.stock_quantity || 0);
-        const addQuantity = parseInt(item.quantity || 0);
-        const newStockQuantity = currentStockQuantity + addQuantity;
+        const adjustedItem = items?.find(i => i.id === item.id);
+        const finalQuantity = adjustedItem?.quantity || item.quantity;
 
-        console.log(`[DEBUG] Product ${item.product_id} (${item.name}): 
-          Current stock: ${currentStockQuantity}, 
-          Adding: ${addQuantity}, 
-          New total: ${newStockQuantity}`);
+        if (finalQuantity <= 0) continue; 
 
         
-        try {
-          const updateSql = 'UPDATE products SET stock_quantity = $1, updated_at = NOW() WHERE id = $2 RETURNING id, stock_quantity';
-          console.log(`[DEBUG] Executing SQL: ${updateSql} with values [${newStockQuantity}, ${item.product_id}]`);
-          
-          const updateResult = await query(updateSql, [newStockQuantity, item.product_id]);
-          
-          if (updateResult.rows.length > 0) {
-            console.log(`[DEBUG] Stock update successful for product ${item.product_id}. New stock: ${updateResult.rows[0].stock_quantity}`);
-          } else {
-            console.log(`[ERROR] No rows updated for product ${item.product_id}!`);
-          }
-        } catch (updateError) {
-          console.error(`[ERROR] Failed to update stock for product ${item.product_id}:`, updateError);
-          throw updateError;
-        }
+        const updateProductSql = `
+          UPDATE products
+          SET stock_quantity = stock_quantity + $1,
+              updated_at = NOW()
+          WHERE id = $2
+          RETURNING stock_quantity as new_stock, min_stock_quantity
+        `;
+        const updateResult = await query(updateProductSql, [finalQuantity, item.product_id]);
+        const updatedProduct = updateResult.rows[0];
 
         
-        try {
-          const movementSql = `
-            INSERT INTO stock_movements (
-              product_id, 
-              type, 
-              quantity, 
-              previous_quantity, 
-              new_quantity, 
-              notes, 
-              reference_id, 
-              reference_type, 
-              created_by
-            ) 
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) 
-            RETURNING id
+        const movementSql = `
+          INSERT INTO stock_movements (
+            product_id, type, quantity, notes, created_by, 
+            previous_quantity, new_quantity
+          )
+          VALUES ($1, 'receipt', $2, $3, $4, $5, $6)
+        `;
+        const movementValues = [
+          item.product_id,
+          finalQuantity,
+          `Receipt from supplier order #${id}`,
+          req.user.id,
+          item.current_stock,
+          updatedProduct.new_stock
+        ];
+        await query(movementSql, movementValues);
+
+        
+        if (adjustedItem && finalQuantity !== item.quantity) {
+          const updateItemSql = `
+            UPDATE supplier_order_items
+            SET quantity = $1,
+                total_price = unit_price * $1
+            WHERE id = $2
           `;
-          
-          const movementParams = [
-            item.product_id,
-            'purchase',
-            addQuantity,
-            currentStockQuantity,
-            newStockQuantity,
-            `Supplier Order #${id}`,
-            id,
-            'supplier_order',
-            req.user?.id || null
-          ];
-          
-          console.log(`[DEBUG] Creating stock movement for product ${item.product_id} with quantity ${addQuantity}`);
-          
-          const movementResult = await query(movementSql, movementParams);
-          console.log(`[DEBUG] Created stock movement with ID: ${movementResult.rows[0]?.id}`);
-        } catch (movementError) {
-          console.error(`[ERROR] Failed to create stock movement for product ${item.product_id}:`, movementError);
-          throw movementError;
+          await query(updateItemSql, [finalQuantity, item.id]);
         }
       }
 
       
       const updateOrderSql = `
-        UPDATE supplier_orders 
-        SET status = 'completed', updated_at = NOW(), updated_by = $1
-        WHERE id = $2
+        UPDATE supplier_orders
+        SET status = 'completed',
+            updated_at = NOW()
+        WHERE id = $1
         RETURNING *
       `;
+      const updateOrderResult = await query(updateOrderSql, [id]);
+      const completedOrder = updateOrderResult.rows[0];
 
-      console.log(`[DEBUG] Updating order ${id} status to completed`);
-      const result = await query(updateOrderSql, [req.user?.id || null, id]);
-      console.log(`[INFO] Order ${id} marked as completed`);
-
-      
       await query('COMMIT');
-      console.log(`[INFO] Transaction committed for order ${id}`);
 
-      
-      try {
-        const supplierQuery = `SELECT name FROM suppliers WHERE id = $1`;
-        const supplierResult = await query(supplierQuery, [order.supplier_id]);
-        const supplierName = supplierResult.rows[0]?.name || 'Unknown Supplier';
-        
-        await triggerNotifications.supplierOrderReceivedNotification(order, supplierName);
-        console.log(`[INFO] Notification sent for order ${id} completion`);
-      } catch (notifErr) {
-        console.error('[ERROR] Error creating supplier order notification:', notifErr);
-      }
-
-      res.json(result.rows[0]);
-    } catch (err) {
-      
+      res.json({
+        message: 'Supplier order completed successfully',
+        order: completedOrder
+      });
+    } catch (error) {
       await query('ROLLBACK');
-      console.error(`[ERROR] Error in completion process, transaction rolled back:`, err);
-      throw err;
+      throw error;
     }
   } catch (err) {
-    console.error('[ERROR] Error completing supplier order:', err);
+    console.error('Error completing supplier order:', err);
     res.status(500).json({ message: 'Error completing supplier order', error: err.message });
   }
 };

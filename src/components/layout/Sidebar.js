@@ -177,12 +177,6 @@ const Sidebar = ({ open, onClose, drawerWidth = 250 }) => {
           path: '/ai-action-history',
           permission: PERMISSIONS.VIEW_AI_ANALYTICS,
         },
-        {
-          text: 'API Tester',
-          icon: <BugReportIcon />,
-          path: '/ai-tester',
-          permission: PERMISSIONS.VIEW_AI_ANALYTICS,
-        },
       ],
     },
     {
@@ -221,6 +215,12 @@ const Sidebar = ({ open, onClose, drawerWidth = 250 }) => {
       text: 'My Products',
       icon: <InventoryIcon />,
       path: '/stock/products',
+      permission: null,
+    },
+    {
+      text: 'My Inventory',
+      icon: <StockMovementIcon />,
+      path: '/stock/supplier-inventory',
       permission: null,
     },
     {

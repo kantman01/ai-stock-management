@@ -24,7 +24,7 @@ exports.scanBarcode = async (req, res) => {
     const productSql = `
       SELECT id, name, sku, barcode, stock_quantity, image_url
       FROM products
-      WHERE barcode = $1
+      WHERE barcode = $1 and is_active = true
     `;
 
     console.log(`[DEBUG] Searching for product with barcode: ${barcode}`);

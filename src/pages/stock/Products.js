@@ -37,7 +37,10 @@ import {
   Alert,
   Snackbar,
   Avatar,
-  LinearProgress
+  LinearProgress,
+  List,
+  ListItem,
+  ListItemText
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -48,7 +51,11 @@ import {
   Refresh as RefreshIcon,
   Clear as ClearIcon,
   Image as ImageIcon,
-  CloudUpload as CloudUploadIcon
+  CloudUpload as CloudUploadIcon,
+  ArrowUpward as IncreaseIcon,
+  ArrowDownward as DecreaseIcon,
+  SwapHoriz as TransferIcon,
+  ShoppingCart as OrderIcon
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 
@@ -116,6 +123,22 @@ const Products = () => {
   const [selectedProductForOrder, setSelectedProductForOrder] = useState(null);
   const [orderQuantity, setOrderQuantity] = useState(1);
 
+  const [supplierProductsDialogOpen, setSupplierProductsDialogOpen] = useState(false);
+  const [supplierProducts, setSupplierProducts] = useState([]);
+  const [supplierProductsLoading, setSupplierProductsLoading] = useState(false);
+  const [supplierProductsPagination, setSupplierProductsPagination] = useState({
+    page: 0,
+    rowsPerPage: 10,
+    totalCount: 0
+  });
+  const [supplierProductsSearch, setSupplierProductsSearch] = useState('');
+  const [selectedSupplierFilter, setSelectedSupplierFilter] = useState('');
+  const [supplierOrderFormData, setSupplierOrderFormData] = useState({
+    supplier_id: '',
+    items: [],
+    notes: ''
+  });
+
   useEffect(() => {
     const fetchCategories = async () => {
       try {
@@ -168,6 +191,12 @@ const Products = () => {
         };
 
         
+        if (isCustomer) {
+          baseParams.min_stock = 1; 
+          
+          
+        }
+        
         const params = productApiUtils.getListParams(baseParams);
 
         const response = await api.get('/products', { params });
@@ -185,7 +214,7 @@ const Products = () => {
     };
 
     fetchProducts();
-  }, [dispatch, page, rowsPerPage, searchTerm, filters, user]);
+  }, [dispatch, page, rowsPerPage, searchTerm, filters, user, isCustomer]);
 
   const handleChangePage = (event, newPage) => {
     setPage(newPage);
@@ -252,25 +281,30 @@ const Products = () => {
   };
 
   const handleAddClick = () => {
-    
-    const initialSupplier = isSupplier && user.supplierId ? user.supplierId : '';
-    
-    setFormData({
-      name: '',
-      description: '',
-      sku: '',
-      barcode: '',
-      category_id: '',
-      supplier_id: initialSupplier,
-      price: 0,
-      cost_price: 0,
-      tax_rate: 0,
-      stock_quantity: 0,
-      min_stock_quantity: 0,
-      is_active: true,
-      image_url: ''
-    });
-    setAddDialogOpen(true);
+    if (isSupplier) {
+      
+      const initialSupplier = user.supplierId ? user.supplierId : '';
+      
+      setFormData({
+        name: '',
+        description: '',
+        sku: '',
+        barcode: '',
+        category_id: '',
+        supplier_id: initialSupplier,
+        price: 0,
+        cost_price: 0,
+        tax_rate: 0,
+        stock_quantity: 0,
+        min_stock_quantity: 0,
+        is_active: true,
+        image_url: ''
+      });
+      setAddDialogOpen(true);
+    } else {
+      
+      handleOpenSupplierProductsDialog();
+    }
   };
 
   const getImageUrl = (imagePath) => {
@@ -302,8 +336,8 @@ const Products = () => {
       price: item.price || 0,
       cost_price: item.cost_price || 0,
       tax_rate: item.tax_rate || 0,
-      stock_quantity: item.stock_quantity || 0,
-      min_stock_quantity: item.min_stock_quantity || 0,
+      stock_quantity: isSupplier ? (item.supplier_stock_quantity || 0) : (item.stock_quantity || 0),
+      min_stock_quantity: isSupplier ? (item.supplier_min_stock_quantity || 0) : (item.min_stock_quantity || 0),
       is_active: item.is_active,
       image_url: item.image_url || ''
     });
@@ -533,11 +567,15 @@ const Products = () => {
     return (
       <Box sx={{ mb: 3 }}>
         <Typography variant="h4" gutterBottom>
-          {isSupplier ? 'My Products' : 'Products Management'}
+          {isSupplier ? 'My Products' : 
+           isCustomer ? 'Available Products' : 
+           'Products Management'}
         </Typography>
         <Typography variant="body1" color="text.secondary">
           {isSupplier 
             ? 'View and manage your products in the inventory'
+            : isCustomer
+            ? 'Browse and order products from our inventory'
             : 'View and manage all products in the inventory'
           }
         </Typography>
@@ -596,6 +634,182 @@ const Products = () => {
     }
   };
 
+  
+  const fetchSupplierProducts = async () => {
+    setSupplierProductsLoading(true);
+    try {
+      const params = {
+        limit: supplierProductsPagination.rowsPerPage,
+        offset: supplierProductsPagination.page * supplierProductsPagination.rowsPerPage,
+        search: supplierProductsSearch || undefined,
+        supplier_id: selectedSupplierFilter || undefined
+      };
+
+      const response = await api.get('/products/all-supplier-products', { params });
+      setSupplierProducts(response.data.data);
+      setSupplierProductsPagination({
+        ...supplierProductsPagination,
+        totalCount: response.data.pagination.total
+      });
+    } catch (error) {
+      console.error('Error fetching supplier products:', error);
+      setApiError('Supplier products could not be loaded');
+    } finally {
+      setSupplierProductsLoading(false);
+    }
+  };
+
+  
+  useEffect(() => {
+    if (supplierProductsDialogOpen) {
+      fetchSupplierProducts();
+    }
+  }, [
+    supplierProductsDialogOpen, 
+    supplierProductsPagination.page, 
+    supplierProductsPagination.rowsPerPage,
+    supplierProductsSearch,
+    selectedSupplierFilter
+  ]);
+
+  
+  const handleSupplierProductsChangePage = (event, newPage) => {
+    setSupplierProductsPagination({
+      ...supplierProductsPagination,
+      page: newPage
+    });
+  };
+
+  const handleSupplierProductsChangeRowsPerPage = (event) => {
+    setSupplierProductsPagination({
+      ...supplierProductsPagination,
+      rowsPerPage: parseInt(event.target.value, 10),
+      page: 0
+    });
+  };
+
+  const handleOpenSupplierProductsDialog = () => {
+    setSupplierProductsSearch('');
+    setSelectedSupplierFilter('');
+    setSupplierOrderFormData({
+      supplier_id: '',
+      items: [],
+      notes: ''
+    });
+    setSupplierProductsDialogOpen(true);
+  };
+
+  const handleCloseSupplierProductsDialog = () => {
+    setSupplierProductsDialogOpen(false);
+  };
+
+  const handleSupplierProductSearch = (e) => {
+    setSupplierProductsSearch(e.target.value);
+    setSupplierProductsPagination({
+      ...supplierProductsPagination,
+      page: 0
+    });
+  };
+
+  const handleSupplierFilterChange = (e) => {
+    setSelectedSupplierFilter(e.target.value);
+    setSupplierProductsPagination({
+      ...supplierProductsPagination,
+      page: 0
+    });
+  };
+
+  const handleAddToOrder = (product) => {
+    const existingItemIndex = supplierOrderFormData.items.findIndex(
+      item => item.product_id === product.id
+    );
+
+    if (existingItemIndex >= 0) {
+      
+      const updatedItems = [...supplierOrderFormData.items];
+      updatedItems[existingItemIndex].quantity += 1;
+      setSupplierOrderFormData({
+        ...supplierOrderFormData,
+        items: updatedItems,
+        supplier_id: product.supplier_id
+      });
+    } else {
+      
+      setSupplierOrderFormData({
+        ...supplierOrderFormData,
+        supplier_id: product.supplier_id,
+        items: [
+          ...supplierOrderFormData.items,
+          {
+            product_id: product.id,
+            product_name: product.name,
+            quantity: 1,
+            unit_price: product.price || 0
+          }
+        ]
+      });
+    }
+  };
+
+  const handleRemoveFromOrder = (productId) => {
+    setSupplierOrderFormData({
+      ...supplierOrderFormData,
+      items: supplierOrderFormData.items.filter(item => item.product_id !== productId)
+    });
+  };
+
+  const handleChangeQuantity = (productId, quantity) => {
+    if (quantity < 1) return;
+    
+    const updatedItems = supplierOrderFormData.items.map(item => 
+      item.product_id === productId 
+        ? { ...item, quantity } 
+        : item
+    );
+    
+    setSupplierOrderFormData({
+      ...supplierOrderFormData,
+      items: updatedItems
+    });
+  };
+
+  const handleCreateSupplierOrder = async () => {
+    if (supplierOrderFormData.items.length === 0) {
+      setApiError('Please add at least one product to the order');
+      return;
+    }
+
+    try {
+      const orderData = {
+        supplier_id: supplierOrderFormData.supplier_id,
+        items: supplierOrderFormData.items.map(item => ({
+          product_id: item.product_id,
+          quantity: item.quantity,
+          unit_price: item.unit_price
+        })),
+        notes: supplierOrderFormData.notes,
+        status: 'pending'
+      };
+
+      const response = await api.post('/supplier-orders', orderData);
+      
+      
+      handleCloseSupplierProductsDialog();
+      
+      
+      setPage(0);
+      
+      setNotification({
+        open: true,
+        message: 'Supplier order created successfully',
+        severity: 'success'
+      });
+    } catch (error) {
+      console.error('Error creating supplier order:', error);
+      setApiError('Failed to create supplier order: ' + (error.response?.data?.message || error.message));
+    }
+  };
+
   return (
     <Box sx={{ p: 3 }}>
       {renderHeader()}
@@ -610,7 +824,7 @@ const Products = () => {
         }}
       >
         <Grid container spacing={2} alignItems="center">
-          <Grid item xs={12} sm={4}>
+          <Grid item xs={12} sm={isCustomer ? 5 : 4}>
             <TextField
               fullWidth
               label="Search Products"
@@ -634,7 +848,7 @@ const Products = () => {
             />
           </Grid>
 
-          <Grid item xs={12} sm={2.5}>
+          <Grid item xs={12} sm={isCustomer ? 3.5 : 2.5}>
             <FormControl fullWidth>
               <InputLabel>Category</InputLabel>
               <Select
@@ -653,32 +867,34 @@ const Products = () => {
             </FormControl>
           </Grid>
 
-          <Grid item xs={12} sm={2.5}>
+          <Grid item xs={12} sm={isCustomer ? 3.5 : 2.5}>
             <FormControl fullWidth>
-              <InputLabel>Stock Status</InputLabel>
+              <InputLabel>Availability</InputLabel>
               <Select
                 name="inStock"
                 value={filters.inStock}
-                label="Stock Status"
+                label="Availability"
                 onChange={handleFilterChange}
               >
-                <MenuItem value="all">All</MenuItem>
+                <MenuItem value="all">All Products</MenuItem>
                 <MenuItem value="inStock">In Stock</MenuItem>
-                <MenuItem value="outOfStock">Out of Stock</MenuItem>
+                {!isCustomer && (
+                  <MenuItem value="outOfStock">Out of Stock</MenuItem>
+                )}
               </Select>
             </FormControl>
           </Grid>
 
-          <Grid item xs={12} sm={3} sx={{ display: 'flex', gap: 1 }}>
+          <Grid item xs={12} sm={isCustomer ? 12 : 3} sx={{ display: 'flex', gap: 1 }}>
             <Button
               variant="outlined"
               color="primary"
               startIcon={<RefreshIcon />}
               onClick={handleClearFilters}
               size="medium"
-              sx={{ flex: 1 }}
+              sx={{ flex: isCustomer ? 'none' : 1 }}
             >
-              Clear
+              Clear Filters
             </Button>
 
             {!isCustomer && (
@@ -690,7 +906,7 @@ const Products = () => {
                 size="medium"
                 sx={{ flex: 1 }}
               >
-                Add Product
+                {isSupplier ? 'Add Product' : 'New Order'}
               </Button>
             )}
           </Grid>
@@ -701,6 +917,12 @@ const Products = () => {
         <Alert severity="error" sx={{ mb: 2 }}>{apiError}</Alert>
       )}
 
+      {isCustomer && (
+        <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+          Showing {items.length} products. Click the "Order" button to place an order for any available product.
+        </Typography>
+      )}
+
       <Card sx={{ borderRadius: 2, boxShadow: '0 2px 8px rgba(0,0,0,0.1)' }}>
         <CardContent sx={{ p: 0 }}>
           <TableContainer>
@@ -708,31 +930,33 @@ const Products = () => {
               <TableHead>
                 <TableRow>
                   <TableCell>Image</TableCell>
-                  <TableCell>Product Name</TableCell>
+                  <TableCell>Name</TableCell>
                   <TableCell>SKU</TableCell>
                   <TableCell>Category</TableCell>
-                  <TableCell align="right">Stock</TableCell>
+                  {!isCustomer && (
+                    <TableCell align="right">{isSupplier ? 'My Stock' : 'Warehouse Stock'}</TableCell>
+                  )}
                   <TableCell align="right">Price</TableCell>
-                  <TableCell align="center">Status</TableCell>
+                  <TableCell align="center">{isCustomer ? 'Availability' : 'Status'}</TableCell>
                   <TableCell align="center">Actions</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
                 {loading ? (
                   <TableRow>
-                    <TableCell colSpan={8} align="center">
+                    <TableCell colSpan={isCustomer ? 7 : 8} align="center">
                       <CircularProgress size={40} sx={{ my: 2 }} />
                     </TableCell>
                   </TableRow>
                 ) : error ? (
                   <TableRow>
-                    <TableCell colSpan={8} align="center" sx={{ color: 'error.main' }}>
+                    <TableCell colSpan={isCustomer ? 7 : 8} align="center" sx={{ color: 'error.main' }}>
                       Error: {error}
                     </TableCell>
                   </TableRow>
                 ) : items.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={8} align="center">
+                    <TableCell colSpan={isCustomer ? 7 : 8} align="center">
                       {searchTerm || filters.category !== 'all' || filters.inStock !== 'all'
                         ? 'No products match your search criteria.'
                         : 'No products have been added yet.'}
@@ -767,21 +991,31 @@ const Products = () => {
                       </TableCell>
                       <TableCell>{item.sku}</TableCell>
                       <TableCell>{item.category_name}</TableCell>
-                      <TableCell align="right">
-                        <Chip
-                          label={item.stock_quantity}
-                          color={getQuantityColor(item.stock_quantity)}
-                          size="small"
-                          variant="outlined"
-                        />
-                      </TableCell>
+                      {!isCustomer && (
+                        <TableCell align="right">
+                          <Chip
+                            label={isSupplier ? (item.supplier_stock_quantity || 0) : item.stock_quantity}
+                            color={getQuantityColor(isSupplier ? (item.supplier_stock_quantity || 0) : item.stock_quantity)}
+                            size="small"
+                            variant="outlined"
+                          />
+                        </TableCell>
+                      )}
                       <TableCell align="right">${parseFloat(item.price).toFixed(2)}</TableCell>
                       <TableCell align="center">
-                        <Chip
-                          label={item.is_active ? 'Active' : 'Inactive'}
-                          color={item.is_active ? 'success' : 'default'}
-                          size="small"
-                        />
+                        {isCustomer ? (
+                          <Chip
+                            label={item.stock_quantity > 0 ? 'Available' : 'Out of Stock'}
+                            color={item.stock_quantity > 0 ? 'success' : 'error'}
+                            size="small"
+                          />
+                        ) : (
+                          <Chip
+                            label={item.is_active ? 'Active' : 'Inactive'}
+                            color={item.is_active ? 'success' : 'default'}
+                            size="small"
+                          />
+                        )}
                       </TableCell>
                       <TableCell align="center">
                         <Box sx={{ display: 'flex', justifyContent: 'center' }}>
@@ -791,6 +1025,7 @@ const Products = () => {
                               color="primary"
                               size="small"
                               onClick={() => handleOrderClick(item)}
+                              disabled={item.stock_quantity <= 0}
                             >
                               Order
                             </Button>
@@ -1142,6 +1377,94 @@ const Products = () => {
         </DialogActions>
       </Dialog>
 
+      <Snackbar
+        open={notification.open}
+        autoHideDuration={6000}
+        onClose={handleNotificationClose}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+      >
+        <Alert
+          onClose={handleNotificationClose}
+          severity={notification.severity}
+        >
+          {notification.message}
+        </Alert>
+      </Snackbar>
+
+      {/* Order Dialog */}
+      <Dialog open={orderDialogOpen} onClose={handleCloseOrderDialog}>
+        <DialogTitle>Place New Order</DialogTitle>
+        <DialogContent>
+          {selectedProductForOrder && (
+            <>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 3 }}>
+                {selectedProductForOrder.image_url ? (
+                  <Avatar
+                    src={getImageUrl(selectedProductForOrder.image_url)}
+                    alt={selectedProductForOrder.name}
+                    variant="rounded"
+                    sx={{ width: 80, height: 80 }}
+                  />
+                ) : (
+                  <Avatar 
+                    variant="rounded" 
+                    sx={{ width: 80, height: 80, bgcolor: 'grey.200' }}
+                  >
+                    <ImageIcon color="disabled" sx={{ fontSize: 40 }} />
+                  </Avatar>
+                )}
+                <Box>
+                  <Typography variant="h6">
+                    {selectedProductForOrder.name}
+                  </Typography>
+                  <Typography variant="body2" color="textSecondary">
+                    SKU: {selectedProductForOrder.sku}
+                  </Typography>
+                  <Typography variant="body2" color="textSecondary">
+                    Category: {selectedProductForOrder.category_name}
+                  </Typography>
+                </Box>
+              </Box>
+
+              <Divider sx={{ mb: 3 }} />
+
+              <Typography variant="subtitle1" gutterBottom>
+                Price: ${parseFloat(selectedProductForOrder.price).toFixed(2)}
+              </Typography>
+              <Typography variant="body2" color="textSecondary" gutterBottom>
+                Available stock: {selectedProductForOrder.stock_quantity}
+              </Typography>
+              
+              <TextField
+                margin="dense"
+                label="Quantity"
+                type="number"
+                fullWidth
+                value={orderQuantity}
+                onChange={(e) => setOrderQuantity(Math.max(1, Math.min(parseInt(e.target.value) || 1, selectedProductForOrder.stock_quantity)))}
+                inputProps={{ min: 1, max: selectedProductForOrder.stock_quantity }}
+                required
+                helperText={`Maximum available: ${selectedProductForOrder.stock_quantity}`}
+                sx={{ mt: 2 }}
+              />
+              <Typography variant="h6" sx={{ mt: 3, fontWeight: 'bold' }}>
+                Total: ${(selectedProductForOrder.price * orderQuantity).toFixed(2)}
+              </Typography>
+            </>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleCloseOrderDialog}>Cancel</Button>
+          <Button 
+            onClick={handleCreateOrder} 
+            variant="contained" 
+            color="primary"
+          >
+            Place Order
+          </Button>
+        </DialogActions>
+      </Dialog>
+
       <Dialog
         open={editDialogOpen}
         onClose={handleDialogClose}
@@ -1365,6 +1688,16 @@ const Products = () => {
               <Grid item xs={12} sm={6}>
                 <TextField
                   fullWidth
+                  label="Initial Stock Quantity"
+                  name="stock_quantity"
+                  type="number"
+                  value={formData.stock_quantity}
+                  onChange={handleInputChange}
+                />
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <TextField
+                  fullWidth
                   label="Minimum Stock Level"
                   name="min_stock_quantity"
                   type="number"
@@ -1372,7 +1705,7 @@ const Products = () => {
                   onChange={handleInputChange}
                 />
               </Grid>
-              <Grid item xs={12} sm={6}>
+              <Grid item xs={12}>
                 <FormControl fullWidth>
                   <InputLabel>Status</InputLabel>
                   <Select
@@ -1407,59 +1740,229 @@ const Products = () => {
         </DialogActions>
       </Dialog>
 
-      <Snackbar
-        open={notification.open}
-        autoHideDuration={6000}
-        onClose={handleNotificationClose}
-        anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+      {/* Supplier Products Dialog for Admin Users */}
+      <Dialog
+        open={supplierProductsDialogOpen}
+        onClose={handleCloseSupplierProductsDialog}
+        maxWidth="lg"
+        fullWidth
       >
-        <Alert
-          onClose={handleNotificationClose}
-          severity={notification.severity}
-        >
-          {notification.message}
-        </Alert>
-      </Snackbar>
-
-      {/* Add Order Dialog */}
-      <Dialog open={orderDialogOpen} onClose={handleCloseOrderDialog}>
-        <DialogTitle>Create Order</DialogTitle>
+        <DialogTitle>
+          Order Products from Suppliers
+        </DialogTitle>
         <DialogContent>
-          {selectedProductForOrder && (
-            <>
-              <Typography variant="h6">
-                {selectedProductForOrder.name}
-              </Typography>
-              <Typography variant="body2" color="textSecondary" gutterBottom>
-                SKU: {selectedProductForOrder.sku}
-              </Typography>
-              <Typography variant="body1">
-                Price: ${selectedProductForOrder.price}
-              </Typography>
+          <Grid container spacing={2} sx={{ mt: 1 }}>
+            {/* Search and filter */}
+            <Grid item xs={12} md={8}>
               <TextField
-                margin="dense"
-                label="Quantity"
-                type="number"
                 fullWidth
-                value={orderQuantity}
-                onChange={(e) => setOrderQuantity(Math.max(1, parseInt(e.target.value) || 1))}
-                inputProps={{ min: 1 }}
-                required
+                placeholder="Search products by name, SKU or barcode"
+                value={supplierProductsSearch}
+                onChange={handleSupplierProductSearch}
+                InputProps={{
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      <SearchIcon />
+                    </InputAdornment>
+                  ),
+                }}
               />
-              <Typography variant="body1" sx={{ mt: 2 }}>
-                Total: ${(selectedProductForOrder.price * orderQuantity).toFixed(2)}
-              </Typography>
-            </>
-          )}
+            </Grid>
+            <Grid item xs={12} md={4}>
+              <FormControl fullWidth>
+                <InputLabel>Filter by Supplier</InputLabel>
+                <Select
+                  value={selectedSupplierFilter}
+                  onChange={handleSupplierFilterChange}
+                  label="Filter by Supplier"
+                >
+                  <MenuItem value="">All Suppliers</MenuItem>
+                  {suppliers.map((supplier) => (
+                    <MenuItem key={supplier.id} value={supplier.id}>
+                      {supplier.name}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            </Grid>
+
+            {/* Supplier products table */}
+            <Grid item xs={12} md={8}>
+              <Paper sx={{ height: 400, overflow: 'auto' }}>
+                {supplierProductsLoading ? (
+                  <Box sx={{ display: 'flex', justifyContent: 'center', p: 4 }}>
+                    <CircularProgress />
+                  </Box>
+                ) : (
+                  <>
+                    <TableContainer>
+                      <Table stickyHeader>
+                        <TableHead>
+                          <TableRow>
+                            <TableCell>Product</TableCell>
+                            <TableCell>Supplier</TableCell>
+                            <TableCell align="right">Price</TableCell>
+                            <TableCell align="center">Action</TableCell>
+                          </TableRow>
+                        </TableHead>
+                        <TableBody>
+                          {supplierProducts.length === 0 ? (
+                            <TableRow>
+                              <TableCell colSpan={4} align="center">
+                                No products found
+                              </TableCell>
+                            </TableRow>
+                          ) : (
+                            supplierProducts.map((product) => (
+                              <TableRow key={product.id}>
+                                <TableCell>
+                                  <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                                    {product.image_url && (
+                                      <Box 
+                                        component="img" 
+                                        src={getImageUrl(product.image_url)}
+                                        alt={product.name}
+                                        sx={{ width: 40, height: 40, mr: 2, objectFit: 'contain' }}
+                                      />
+                                    )}
+                                    <Box>
+                                      <Typography variant="body2" fontWeight="bold">
+                                        {product.name}
+                                      </Typography>
+                                      <Typography variant="caption" color="text.secondary">
+                                        SKU: {product.sku}
+                                      </Typography>
+                                    </Box>
+                                  </Box>
+                                </TableCell>
+                                <TableCell>{product.supplier_name}</TableCell>
+                                <TableCell align="right">
+                                  ${parseFloat(product.price).toFixed(2)}
+                                </TableCell>
+                                <TableCell align="center">
+                                  <Button
+                                    variant="contained"
+                                    size="small"
+                                    startIcon={<AddIcon />}
+                                    onClick={() => handleAddToOrder(product)}
+                                    disabled={
+                                      supplierOrderFormData.supplier_id && 
+                                      supplierOrderFormData.supplier_id !== product.supplier_id
+                                    }
+                                  >
+                                    Add
+                                  </Button>
+                                </TableCell>
+                              </TableRow>
+                            ))
+                          )}
+                        </TableBody>
+                      </Table>
+                    </TableContainer>
+                    <TablePagination
+                      rowsPerPageOptions={[5, 10, 25]}
+                      component="div"
+                      count={supplierProductsPagination.totalCount}
+                      rowsPerPage={supplierProductsPagination.rowsPerPage}
+                      page={supplierProductsPagination.page}
+                      onPageChange={handleSupplierProductsChangePage}
+                      onRowsPerPageChange={handleSupplierProductsChangeRowsPerPage}
+                    />
+                  </>
+                )}
+              </Paper>
+            </Grid>
+
+            {/* Order summary */}
+            <Grid item xs={12} md={4}>
+              <Paper sx={{ p: 2, height: 400, overflow: 'auto' }}>
+                <Typography variant="h6" gutterBottom>
+                  Order Summary
+                </Typography>
+                
+                {supplierOrderFormData.items.length === 0 ? (
+                  <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
+                    No products added to order yet. Click "Add" next to products to include them.
+                  </Typography>
+                ) : (
+                  <>
+                    <Typography variant="body2" color="text.secondary" gutterBottom>
+                      Supplier: {suppliers.find(s => s.id === supplierOrderFormData.supplier_id)?.name}
+                    </Typography>
+                    
+                    <List dense>
+                      {supplierOrderFormData.items.map((item) => (
+                        <ListItem
+                          key={item.product_id}
+                          secondaryAction={
+                            <IconButton 
+                              edge="end" 
+                              aria-label="remove"
+                              onClick={() => handleRemoveFromOrder(item.product_id)}
+                              size="small"
+                            >
+                              <DeleteIcon />
+                            </IconButton>
+                          }
+                        >
+                          <ListItemText
+                            primary={item.product_name}
+                            secondary={`$${parseFloat(item.unit_price).toFixed(2)} × ${item.quantity} = $${(item.unit_price * item.quantity).toFixed(2)}`}
+                          />
+                          <Box sx={{ display: 'flex', alignItems: 'center', ml: 2 }}>
+                            <IconButton 
+                              size="small"
+                              onClick={() => handleChangeQuantity(item.product_id, Math.max(1, item.quantity - 1))}
+                            >
+                              <DecreaseIcon fontSize="small" />
+                            </IconButton>
+                            <Typography sx={{ mx: 1 }}>{item.quantity}</Typography>
+                            <IconButton 
+                              size="small"
+                              onClick={() => handleChangeQuantity(item.product_id, item.quantity + 1)}
+                            >
+                              <IncreaseIcon fontSize="small" />
+                            </IconButton>
+                          </Box>
+                        </ListItem>
+                      ))}
+                    </List>
+                    
+                    <Divider sx={{ my: 2 }} />
+                    
+                    <Typography variant="subtitle1" align="right">
+                      Total: ${supplierOrderFormData.items.reduce((sum, item) => 
+                        sum + (item.unit_price * item.quantity), 0).toFixed(2)}
+                    </Typography>
+                    
+                    <TextField
+                      fullWidth
+                      multiline
+                      rows={2}
+                      label="Order Notes"
+                      value={supplierOrderFormData.notes}
+                      onChange={(e) => setSupplierOrderFormData({
+                        ...supplierOrderFormData,
+                        notes: e.target.value
+                      })}
+                      sx={{ mt: 2 }}
+                    />
+                  </>
+                )}
+              </Paper>
+            </Grid>
+          </Grid>
         </DialogContent>
         <DialogActions>
-          <Button onClick={handleCloseOrderDialog}>Cancel</Button>
-          <Button 
-            onClick={handleCreateOrder} 
-            variant="contained" 
+          <Button onClick={handleCloseSupplierProductsDialog}>Cancel</Button>
+          <Button
+            variant="contained"
             color="primary"
+            onClick={handleCreateSupplierOrder}
+            disabled={supplierOrderFormData.items.length === 0}
+            startIcon={<OrderIcon />}
           >
-            Place Order
+            Create Order
           </Button>
         </DialogActions>
       </Dialog>

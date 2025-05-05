@@ -198,13 +198,17 @@ const apiServices = {
     update: (id, productData) => api.put(`/products/${id}`, productData),
     delete: (id) => api.delete(`/products/${id}`),
     uploadImage: (formData, onUploadProgress) => {
-      return api.post('/products/upload-image', formData, {
-        headers: {
-          'Content-Type': 'multipart/form-data'
-        },
+      const config = {
+        headers: { 'Content-Type': 'multipart/form-data' },
         onUploadProgress
-      });
-    }
+      };
+      return api.post('/products/upload-image', formData, config);
+    },
+    getAllSupplierProducts: (params) => api.get('/products/all-supplier-products', { params }),
+  },
+
+  barcode: {
+    scanBarcode: (data) => api.post('/barcode/scan', data),
   },
 
   categories: {

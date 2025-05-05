@@ -85,7 +85,7 @@ exports.getSupplierById = async (req, res) => {
       SELECT p.id, p.name, p.sku, p.price, p.stock_quantity
       FROM products p
       JOIN product_suppliers ps ON p.id = ps.product_id
-      WHERE ps.supplier_id = $1
+      WHERE ps.supplier_id = $1 and p.is_active = true
       ORDER BY p.name
       LIMIT 10
     `;
@@ -548,7 +548,17 @@ exports.deleteSupplier = async (req, res) => {
 exports.getSupplierProducts = async (req, res) => {
   try {
     const { id } = req.params;
-    const { limit = 50, offset = 0 } = req.query;
+    const { limit = 50, offset = 0, search } = req.query;
+
+    
+    const isOwner = req.user && req.user.role && req.user.role.code === 'supplier' && 
+                    req.user.supplierId === parseInt(id);
+    const isAdmin = req.user && req.user.role && 
+                   (req.user.role.code === 'admin' || req.user.role.code === 'warehouse');
+
+    if (!isOwner && !isAdmin) {
+      return res.status(403).json({ message: 'You do not have permission to view these products' });
+    }
 
     const checkResult = await query('SELECT * FROM suppliers WHERE id = $1', [id]);
 
@@ -556,35 +566,58 @@ exports.getSupplierProducts = async (req, res) => {
       return res.status(404).json({ message: 'Supplier not found' });
     }
 
-    const productsSql = `
-      SELECT DISTINCT ON (p.id) p.*, c.name as category_name,
-      (SELECT MAX(soi.unit_price) FROM supply_order_items soi 
-       JOIN supply_orders so ON soi.order_id = so.id 
-       WHERE so.supplier_id = $1 AND soi.product_id = p.id) as last_purchase_price,
-      (SELECT MAX(so.created_at) FROM supply_order_items soi 
-       JOIN supply_orders so ON soi.order_id = so.id 
-       WHERE so.supplier_id = $1 AND soi.product_id = p.id) as last_purchase_date
+    let sql = `
+      SELECT p.*, c.name as category_name, 
+             COALESCE(ss.stock_quantity, 0) as supplier_stock_quantity,
+             COALESCE(ss.min_stock_quantity, 0) as supplier_min_stock_quantity
       FROM products p
-      LEFT JOIN product_categories c ON p.category_id = c.id
-      JOIN supply_order_items soi ON p.id = soi.product_id
-      JOIN supply_orders so ON soi.order_id = so.id
-      WHERE so.supplier_id = $1
-      ORDER BY p.id, p.name
-      LIMIT $2 OFFSET $3
+      LEFT JOIN categories c ON p.category_id = c.id
+      LEFT JOIN supplier_stock ss ON p.id = ss.product_id AND ss.supplier_id = $1
+      and p.is_active = true
+      WHERE p.supplier_id = $1
     `;
 
-    const productsResult = await query(productsSql, [id, limit, offset]);
+    const params = [id];
 
-    const countSql = `
-      SELECT COUNT(DISTINCT p.id) 
-      FROM products p
-      JOIN supply_order_items soi ON p.id = soi.product_id
-      JOIN supply_orders so ON soi.order_id = so.id
-      WHERE so.supplier_id = $1
-    `;
+    if (search) {
+      sql += ` AND (
+        p.name ILIKE $${params.length + 1} OR
+        p.sku ILIKE $${params.length + 1} OR
+        p.barcode ILIKE $${params.length + 1}
+      )`;
+      params.push(`%${search}%`);
+    }
 
-    const countResult = await query(countSql, [id]);
+    
+    if (isAdmin) {
+      sql += `
+        LEFT JOIN LATERAL (
+          SELECT so.created_at as last_purchase_date, soi.unit_price as last_purchase_price
+          FROM supplier_order_items soi 
+          JOIN supplier_orders so ON soi.supplier_order_id = so.id 
+          WHERE so.supplier_id = $1 AND soi.product_id = p.id
+          ORDER BY so.created_at DESC
+          LIMIT 1
+        ) as last_purchase ON true
+      `;
+    }
+
+    const countSql = `SELECT COUNT(*) FROM products WHERE supplier_id = $1 and is_active = true`;
+    if (search) {
+      countSql += ` AND (
+        name ILIKE $2 OR
+        sku ILIKE $2 OR
+        barcode ILIKE $2
+      )`;
+    }
+    
+    const countResult = await query(countSql, search ? [id, `%${search}%`] : [id]);
     const total = parseInt(countResult.rows[0].count);
+
+    sql += ` ORDER BY p.name ASC LIMIT $${params.length + 1} OFFSET $${params.length + 2}`;
+    params.push(parseInt(limit), parseInt(offset));
+
+    const productsResult = await query(sql, params);
 
     res.json({
       data: productsResult.rows,
@@ -598,5 +631,111 @@ exports.getSupplierProducts = async (req, res) => {
   } catch (err) {
     console.error('Error fetching supplier products:', err);
     res.status(500).json({ message: 'Error fetching supplier products', error: err.message });
+  }
+};
+
+/**
+ * Update supplier product stock
+ * This is a simplified stock entry for suppliers
+ */
+exports.updateSupplierProductStock = async (req, res) => {
+  try {
+    const { supplierId, productId } = req.params;
+    const { quantity, notes } = req.body;
+
+    
+    if (!quantity || isNaN(parseInt(quantity)) || parseInt(quantity) <= 0) {
+      return res.status(400).json({ message: 'Valid quantity is required' });
+    }
+
+    
+    const isOwner = req.user && req.user.role && req.user.role.code === 'supplier' && 
+                    req.user.supplierId === parseInt(supplierId);
+                    
+    if (!isOwner) {
+      return res.status(403).json({ message: 'You can only update your own products' });
+    }
+
+    
+    const productCheck = await query(
+      'SELECT id, name FROM products WHERE id = $1 AND supplier_id = $2 and is_active = true',
+      [productId, supplierId]
+    );
+
+    if (productCheck.rows.length === 0) {
+      return res.status(404).json({ message: 'Product not found or does not belong to this supplier' });
+    }
+
+    await query('BEGIN');
+
+    try {
+      
+      const stockCheck = await query(
+        'SELECT stock_quantity FROM supplier_stock WHERE supplier_id = $1 AND product_id = $2',
+        [supplierId, productId]
+      );
+      
+      let previousQuantity = 0;
+      const addQuantity = parseInt(quantity);
+      
+      if (stockCheck.rows.length > 0) {
+        
+        previousQuantity = parseInt(stockCheck.rows[0].stock_quantity || 0);
+        const newQuantity = previousQuantity + addQuantity;
+        
+        await query(
+          'UPDATE supplier_stock SET stock_quantity = $1, updated_at = NOW() WHERE supplier_id = $2 AND product_id = $3 RETURNING stock_quantity',
+          [newQuantity, supplierId, productId]
+        );
+      } else {
+        
+        await query(
+          'INSERT INTO supplier_stock (supplier_id, product_id, stock_quantity) VALUES ($1, $2, $3)',
+          [supplierId, productId, addQuantity]
+        );
+      }
+      
+      const newQuantity = previousQuantity + addQuantity;
+
+      
+      const movementSql = `
+        INSERT INTO stock_movements (
+          product_id, type, quantity, previous_quantity, new_quantity, 
+          notes, created_by
+        ) 
+        VALUES ($1, 'receipt', $2, $3, $4, $5, $6) 
+        RETURNING id
+      `;
+      
+      const movementParams = [
+        productId,
+        addQuantity,
+        previousQuantity,
+        newQuantity,
+        notes || `Supplier stock update`,
+        req.user?.id || null
+      ];
+      
+      await query(movementSql, movementParams);
+
+      await query('COMMIT');
+
+      res.json({
+        message: 'Supplier stock updated successfully',
+        product: {
+          id: productCheck.rows[0].id,
+          name: productCheck.rows[0].name,
+          previous_quantity: previousQuantity,
+          added_quantity: addQuantity,
+          new_quantity: newQuantity
+        }
+      });
+    } catch (error) {
+      await query('ROLLBACK');
+      throw error;
+    }
+  } catch (err) {
+    console.error('Error updating supplier product stock:', err);
+    res.status(500).json({ message: 'Error updating product stock', error: err.message });
   }
 }; 

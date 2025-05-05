@@ -11,6 +11,7 @@ import NotFound from './pages/NotFound';
 import Products from './pages/stock/Products';
 import Categories from './pages/stock/Categories';
 import StockMovements from './pages/stock/StockMovements';
+import SupplierStock from './pages/stock/SupplierStock';
 import Orders from './pages/Orders';
 import OrderDetail from './pages/OrderDetail';
 import SupplierOrders from './pages/SupplierOrders';
@@ -25,7 +26,6 @@ import ForgotPassword from './pages/ForgotPassword';
 import ResetPassword from './pages/ResetPassword';
 import AIInsights from './pages/AIInsights';
 import AIActionHistory from './pages/AIActionHistory';
-import AITester from './components/AITester';
 
 import PrivateRoute from './components/PrivateRoute';
 import { PERMISSIONS } from './utils/roles';
@@ -95,6 +95,14 @@ function App() {
               element={
                 <PrivateRoute requiredPermission={PERMISSIONS.VIEW_PRODUCTS}>
                   <Products />
+                </PrivateRoute>
+              }
+            />
+            <Route
+              path="supplier-inventory"
+              element={
+                <PrivateRoute requiredPermission={PERMISSIONS.VIEW_OWN_SUPPLIER_ORDERS}>
+                  <SupplierStock />
                 </PrivateRoute>
               }
             />
@@ -175,15 +183,6 @@ function App() {
             element={
               <PrivateRoute requiredPermission={PERMISSIONS.VIEW_AI_ANALYTICS}>
                 <AIActionHistory />
-              </PrivateRoute>
-            }
-          />
-
-          <Route
-            path="ai-tester"
-            element={
-              <PrivateRoute requiredPermission={PERMISSIONS.VIEW_AI_ANALYTICS}>
-                <AITester />
               </PrivateRoute>
             }
           />

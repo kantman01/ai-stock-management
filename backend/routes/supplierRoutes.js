@@ -36,4 +36,10 @@ router.delete(
   supplierController.deleteSupplier
 );
 
+
+router.post('/:supplierId/products/:productId/stock', 
+  authenticateJWT, 
+  supplierController.updateSupplierProductStock
+);
+
 module.exports = router; 

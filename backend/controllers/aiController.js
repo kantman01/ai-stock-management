@@ -68,7 +68,7 @@ exports.getStockPredictions = async (req, res) => {
     }
     
     
-    const lowStockSql = `
+    const stockAnalysisSql = `
       SELECT 
         p.id, 
         p.name, 
@@ -86,14 +86,19 @@ exports.getStockPredictions = async (req, res) => {
         ) as pending_order_quantity
       FROM products p
       LEFT JOIN categories c ON p.category_id = c.id
-      WHERE p.stock_quantity <= p.min_stock_quantity AND p.is_active = true
+      WHERE p.is_active = true
+        AND (p.stock_quantity < p.min_stock_quantity * 2)
+        AND EXISTS (
+          SELECT 1 FROM order_items oi 
+          WHERE oi.product_id = p.id
+        )
       ORDER BY (p.stock_quantity * 1.0 / NULLIF(p.min_stock_quantity, 0)) ASC
       LIMIT 20
     `;
     
-    const lowStockResult = await query(lowStockSql);
+    const stockResult = await query(stockAnalysisSql);
     
-    if (lowStockResult.rows.length === 0) {
+    if (stockResult.rows.length === 0) {
       return res.json({
         message: 'No products need stock replenishment currently.',
         predictions: []
@@ -101,7 +106,7 @@ exports.getStockPredictions = async (req, res) => {
     }
 
     
-    const productIds = lowStockResult.rows.map(p => p.id);
+    const productIds = stockResult.rows.map(p => p.id);
     const historySql = `
       SELECT oi.product_id, 
         DATE_TRUNC('month', o.created_at) as month,
@@ -109,7 +114,7 @@ exports.getStockPredictions = async (req, res) => {
       FROM order_items oi
       JOIN orders o ON oi.order_id = o.id
       WHERE oi.product_id = ANY($1)
-      AND o.created_at > NOW() - INTERVAL '6 months'
+      AND o.created_at > NOW() - INTERVAL '12 months'
       GROUP BY oi.product_id, DATE_TRUNC('month', o.created_at)
       ORDER BY oi.product_id, month
     `;
@@ -117,7 +122,30 @@ exports.getStockPredictions = async (req, res) => {
     const historyResult = await query(historySql, [productIds]);
     
     
-    const products = lowStockResult.rows.map(product => {
+    const currentMonth = new Date().getMonth() + 1; 
+    const currentYear = new Date().getFullYear();
+    
+    const seasonalSql = `
+      SELECT 
+        oi.product_id,
+        EXTRACT(MONTH FROM o.created_at) as month,
+        EXTRACT(YEAR FROM o.created_at) as year,
+        SUM(oi.quantity) as quantity_sold
+      FROM order_items oi
+      JOIN orders o ON oi.order_id = o.id
+      WHERE oi.product_id = ANY($1)
+      AND (
+        (EXTRACT(MONTH FROM o.created_at) = $2 AND EXTRACT(YEAR FROM o.created_at) = $3 - 1) OR
+        (EXTRACT(MONTH FROM o.created_at) = $2 AND EXTRACT(YEAR FROM o.created_at) = $3)
+      )
+      GROUP BY oi.product_id, EXTRACT(MONTH FROM o.created_at), EXTRACT(YEAR FROM o.created_at)
+      ORDER BY oi.product_id, year, month
+    `;
+    
+    const seasonalResult = await query(seasonalSql, [productIds, currentMonth, currentYear]);
+    
+    
+    const products = stockResult.rows.map(product => {
       const salesHistory = historyResult.rows
         .filter(row => row.product_id === product.id)
         .map(row => ({
@@ -126,13 +154,34 @@ exports.getStockPredictions = async (req, res) => {
         }));
       
       
+      const seasonalData = seasonalResult.rows
+        .filter(row => row.product_id === product.id)
+        .map(row => ({
+          month: parseInt(row.month),
+          year: parseInt(row.year),
+          quantity_sold: parseInt(row.quantity_sold)
+        }));
+      
+      
+      let yearOverYearGrowth = null;
+      const lastYearSales = seasonalData.find(d => d.year === currentYear - 1 && d.month === currentMonth);
+      const thisYearSales = seasonalData.find(d => d.year === currentYear && d.month === currentMonth);
+      
+      if (lastYearSales && thisYearSales) {
+        yearOverYearGrowth = (thisYearSales.quantity_sold - lastYearSales.quantity_sold) / lastYearSales.quantity_sold;
+      }
+      
       const effectiveStock = parseInt(product.stock_quantity) + parseInt(product.pending_order_quantity || 0);
       
       return {
         ...product,
         effective_stock: effectiveStock,
         pending_orders: parseInt(product.pending_order_quantity || 0),
-        sales_history: salesHistory
+        sales_history: salesHistory,
+        seasonal_data: seasonalData,
+        year_over_year_growth: yearOverYearGrowth,
+        current_month: currentMonth,
+        current_year: currentYear
       };
     });
 
@@ -141,20 +190,37 @@ exports.getStockPredictions = async (req, res) => {
       role: "system",
       content: `You are an AI inventory management assistant helping to predict stock needs. 
       Analyze the products with low stock and their sales history to provide:
-      1. Recommended order quantity
-      2. Ideal minimum stock level
-      3. Reasoning for your recommendation based on historical demand patterns and trends.
+      1. Recommended order quantity based on historical sales patterns
+      2. Ideal minimum stock level considering seasonal factors
+      3. Whether the minimum stock level should be adjusted due to seasonal patterns
+      4. Reasoning for your recommendation based on historical and seasonal demand patterns
       
-      Note that some products may already have pending orders. The effective_stock field includes 
-      both current stock_quantity and pending_order_quantity. Consider both values in your analysis.
+      Consider these specific factors:
+      - Year-over-year growth for the current month (if available)
+      - Seasonal patterns and monthly fluctuations
+      - Current month and upcoming seasonal events
+      - The current effective stock (stock_quantity + pending_orders)
       
       When a product has significant pending orders, you should reduce or eliminate the recommended order quantity.
       
-      Provide your response in JSON format with these fields: product_id, name, current_stock, effective_stock,
-      pending_orders, recommended_order_quantity, minimum_stock_level, priority, reasoning.`
+      Provide your response in JSON format with these fields: 
+      - product_id: the ID of the product
+      - name: product name
+      - current_stock: actual current stock quantity
+      - effective_stock: current stock plus pending orders
+      - pending_orders: quantity on order but not received
+      - recommended_order_quantity: how much to order now
+      - minimum_stock_level: recommended minimum stock level
+      - update_min_stock: boolean indicating if min_stock_quantity should be updated in the database
+      - priority: priority level (urgent, high, medium, low)
+      - reasoning: detailed explanation including seasonal factors`
     };
 
-    const aiResponse = await requestOpenAI(prompt, { products: products });
+    const aiResponse = await requestOpenAI(prompt, { 
+      products: products,
+      current_season: getSeason(new Date()),
+      is_holiday_season: isHolidaySeason(new Date())
+    });
     
     if (!aiResponse) {
       return res.status(500).json({ 
@@ -166,7 +232,7 @@ exports.getStockPredictions = async (req, res) => {
     
     await saveAIInteraction('stock_prediction', {
       products: products,
-      current_stock: lowStockResult.rows
+      current_stock: stockResult.rows
     }, aiResponse);
     
     
@@ -300,7 +366,7 @@ exports.getSalesForecasts = async (req, res) => {
       LEFT JOIN categories c ON p.category_id = c.id
       JOIN order_items oi ON p.id = oi.product_id
       JOIN orders o ON oi.order_id = o.id
-      WHERE ${targetCondition}
+      WHERE ${targetCondition} and p.is_active = true
       AND o.created_at > NOW() - INTERVAL '12 months'
       GROUP BY p.id, p.name, p.sku, c.name, DATE_TRUNC('month', o.created_at)
       ORDER BY p.id, month
@@ -328,6 +394,58 @@ exports.getSalesForecasts = async (req, res) => {
       });
     });
     
+    
+    const recurringOrdersSql = `
+      SELECT 
+        p.id as product_id,
+        p.name as product_name,
+        c.id as customer_id,
+        CONCAT(c.first_name, ' ', c.last_name) as customer_name,
+        EXTRACT(DAY FROM o.created_at) as day_of_month,
+        COUNT(DISTINCT DATE_TRUNC('month', o.created_at)) as months_count,
+        SUM(oi.quantity) as total_quantity,
+        COUNT(DISTINCT o.id) as order_count,
+        MAX(o.created_at) as last_order_date,
+        STRING_AGG(DISTINCT TO_CHAR(o.created_at, 'Mon-YYYY'), ', ') as order_months
+      FROM orders o
+      JOIN customers c ON o.customer_id = c.id
+      JOIN order_items oi ON o.id = oi.order_id
+      JOIN products p ON oi.product_id = p.id
+      WHERE o.created_at > NOW() - INTERVAL '12 months'
+      GROUP BY p.id, p.name, c.id, CONCAT(c.first_name, ' ', c.last_name), EXTRACT(DAY FROM o.created_at)
+      HAVING 
+        COUNT(DISTINCT DATE_TRUNC('month', o.created_at)) >= 2 AND 
+        COUNT(DISTINCT o.id) >= 2
+      ORDER BY months_count DESC, total_quantity DESC
+    `;
+    
+    const recurringOrdersResult = await query(recurringOrdersSql);
+    
+    
+    const recurringOrders = {};
+    
+    recurringOrdersResult.rows.forEach(row => {
+      if (!recurringOrders[row.product_id]) {
+        recurringOrders[row.product_id] = [];
+      }
+      
+      recurringOrders[row.product_id].push({
+        customer_id: row.customer_id,
+        customer_name: row.customer_name,
+        day_of_month: Math.round(parseFloat(row.day_of_month)),
+        months_count: parseInt(row.months_count),
+        order_count: parseInt(row.order_count),
+        total_quantity: parseInt(row.total_quantity),
+        last_order_date: row.last_order_date,
+        order_months: row.order_months
+      });
+    });
+    
+    
+    Object.keys(productMap).forEach(productId => {
+      productMap[productId].recurring_orders = recurringOrders[productId] || [];
+    });
+    
     const products = Object.values(productMap);
     
     
@@ -340,8 +458,15 @@ exports.getSalesForecasts = async (req, res) => {
       2. Projected revenue based on past pricing
       3. Growth trend analysis
       4. Seasonal factors affecting sales
+      
+      Additionally, identify and highlight recurring customer purchase patterns:
+      - Flag any products that have recurring orders from the same customers at regular intervals
+      - Include details about these recurring patterns (customer, frequency, typical order day)
+      - Estimate the likelihood of these recurring orders continuing in the forecast period
+      
       Provide your response in JSON format with these fields for each product: product_id, name, 
-      forecasted_months (array of month objects with quantity and revenue), growth_trend, seasonal_factors.`
+      forecasted_months (array of month objects with quantity and revenue), growth_trend, seasonal_factors,
+      recurring_order_patterns (array of recurring customer patterns if any).`
     };
 
     const aiResponse = await requestOpenAI(prompt, { 
@@ -450,7 +575,7 @@ exports.getRecommendations = async (req, res) => {
     const lowStockSql = `
       SELECT COUNT(*) as count
       FROM products
-      WHERE stock_quantity < 10
+      WHERE stock_quantity < 10 and is_active = true
     `;
     
     const lowStockResult = await query(lowStockSql);
@@ -464,7 +589,7 @@ exports.getRecommendations = async (req, res) => {
       JOIN order_items oi ON p.id = oi.product_id
       JOIN orders o ON oi.order_id = o.id
       LEFT JOIN categories c ON p.category_id = c.id
-      WHERE o.created_at > NOW() - INTERVAL '30 days'
+      WHERE o.created_at > NOW() - INTERVAL '30 days' and p.is_active = true
       GROUP BY p.id, p.name, p.category_id, c.name
       ORDER BY quantity_sold DESC
       LIMIT 10
@@ -656,14 +781,20 @@ exports.processStockOrder = async (req, res) => {
       
       When a product has significant pending orders, you should reduce or eliminate the recommended order quantity.
       
+      Consider seasonal factors:
+      - Current season: ${getSeason(new Date())}
+      - Is holiday season: ${isHolidaySeason(new Date())}
+      - Current month: ${new Date().toLocaleString('default', { month: 'long' })}
+      
       For each product that needs restocking, provide:
       1. Recommended restock quantity
       2. Priority level (urgent, high, medium, low)
-      3. Reasoning for recommendation
+      3. Reasoning for recommendation including seasonal factors
+      4. Whether the minimum stock level should be adjusted due to seasonal patterns
 
-      Keep in mind seasonal trends and recent sales velocity. Provide your response in JSON format with an array of 
+      Provide your response in JSON format with an array of 
       restock_recommendations containing: product_id, name, current_stock, effective_stock, pending_orders, 
-      recommended_quantity, priority, reasoning.`
+      recommended_quantity, update_min_stock, minimum_stock_level, priority, reasoning.`
     };
 
     console.log(`[INFO] Sending AI request for post-sale analysis of order #${order_id}`);
@@ -760,6 +891,7 @@ exports.runScheduledInventoryAnalysis = async (req, res) => {
          JOIN orders o ON oi.order_id = o.id 
          WHERE oi.product_id = p.id AND o.created_at > NOW() - INTERVAL '30 days') as quantity_sold_30d
       FROM products p
+      WHERE p.is_active = true
       LEFT JOIN categories c ON p.category_id = c.id
       ORDER BY p.stock_quantity ASC
     `;
@@ -1102,17 +1234,39 @@ async function processUrgentRestockRecommendations(recommendations) {
 
 function getSeason(date) {
   const month = date.getMonth() + 1; 
+  const day = date.getDate();
+  const northernHemisphere = true; 
   
-  if (month >= 3 && month <= 5) return 'Spring';
-  if (month >= 6 && month <= 8) return 'Summer';
-  if (month >= 9 && month <= 11) return 'Fall';
-  return 'Winter';
+  if (northernHemisphere) {
+    if (month >= 3 && month <= 5) return 'Spring';
+    if (month >= 6 && month <= 8) return 'Summer';
+    if (month >= 9 && month <= 11) return 'Fall';
+    return 'Winter';
+  } else {
+    
+    if (month >= 3 && month <= 5) return 'Fall';
+    if (month >= 6 && month <= 8) return 'Winter';
+    if (month >= 9 && month <= 11) return 'Spring';
+    return 'Summer';
+  }
 }
 
 
 function isHolidaySeason(date) {
-  const month = date.getMonth() + 1;
-  return month >= 11 || month === 12 || month === 1; 
+  const month = date.getMonth() + 1; 
+  const day = date.getDate();
+  
+  
+  
+  if (month === 11 || month === 12 || (month === 1 && day <= 15)) return true;
+  
+  
+  if ((month === 4 && day >= 15) || (month === 5 && day <= 15)) return true;
+  
+  
+  if (month === 7 || month === 8) return true;
+  
+  return false;
 }
 
 /**
@@ -1120,12 +1274,6 @@ function isHolidaySeason(date) {
  */
 async function requestOpenAI(systemPrompt, data) {
   try {
-    
-    if (!OPENAI_API_KEY) {
-      console.warn('OpenAI API key not set, returning mock data');
-      return createMockResponse(systemPrompt.content, data);
-    }
-    
     const userPrompt = {
       role: "user",
       content: `Here is the data to analyze: ${JSON.stringify(data, null, 2)}`
@@ -1144,6 +1292,10 @@ async function requestOpenAI(systemPrompt, data) {
     console.log('Request URL:', OPENAI_API_URL);
     console.log('Request body:', JSON.stringify(requestBody, null, 2));
     
+    if (!OPENAI_API_KEY) {
+      throw new Error('OpenAI API key is not configured. Please set the OPENAI_API_KEY environment variable.');
+    }
+    
     const response = await axios.post(OPENAI_API_URL, requestBody, { headers });
     
     if (response.data && response.data.choices && response.data.choices.length > 0) {
@@ -1151,7 +1303,6 @@ async function requestOpenAI(systemPrompt, data) {
       console.log('Response received from OpenAI:', content.substring(0, 200) + '...');
       
       try {
-        
         return JSON.parse(content);
       } catch (parseError) {
         console.error('Error parsing OpenAI response as JSON:', parseError);
@@ -1163,15 +1314,7 @@ async function requestOpenAI(systemPrompt, data) {
     return null;
   } catch (err) {
     console.error('Error calling OpenAI API:', err.response?.data || err.message);
-    
-    
-    if (USE_MOCK_ON_RATE_LIMIT && 
-        err.response?.data?.error?.code === 'rate_limit_exceeded') {
-      console.warn('OpenAI rate limit exceeded, falling back to mock data');
-      return createMockResponse(systemPrompt.content, data);
-    }
-    
-    return null;
+    throw err;
   }
 }
 
@@ -1232,139 +1375,10 @@ async function saveAIAction(action_type, action_data) {
 
 /**
  * Create mock response for development without OpenAI API
+ * NOTE: We're removing this function as requested
  */
 function createMockResponse(promptContent, data) {
-  console.log('Creating mock response for:', promptContent.substring(0, 50) + '...');
-  
-  
-  if (promptContent.includes('stock prediction') || promptContent.includes('inventory management')) {
-    const mockProducts = [];
-    
-    
-    if (data.products && Array.isArray(data.products)) {
-      data.products.forEach(product => {
-        const currentStock = product.stock_quantity || 5;
-        const minStock = product.min_stock_quantity || 10;
-        const salesHistory = product.sales_history || [];
-        
-        
-        let recommendedQuantity = 0;
-        if (salesHistory.length > 0) {
-          
-          const recentSales = salesHistory.slice(-3);
-          const totalSold = recentSales.reduce((sum, sale) => sum + (sale.quantity_sold || 0), 0);
-          recommendedQuantity = Math.ceil(totalSold / Math.max(1, recentSales.length)) * 2;
-        } else {
-          
-          recommendedQuantity = Math.max(10, minStock * 2 - currentStock);
-        }
-        
-        
-        let priority = 'medium';
-        if (currentStock === 0) priority = 'urgent';
-        else if (currentStock < minStock / 2) priority = 'high';
-        else if (currentStock > minStock * 1.5) priority = 'low';
-        
-        mockProducts.push({
-          product_id: product.id,
-          name: product.name,
-          recommended_order_quantity: recommendedQuantity,
-          minimum_stock_level: Math.max(minStock, Math.ceil(recommendedQuantity * 0.3)),
-          priority: priority,
-          reasoning: `Mock analysis based on current stock of ${currentStock} units compared to minimum stock of ${minStock} units.`
-                    + (salesHistory.length > 0 ? ` Recent sales trends indicate moderate demand.` : '')
-        });
-      });
-    }
-    
-    
-    if (mockProducts.length === 0) {
-      mockProducts.push(
-        {
-          product_id: 1,
-          name: "Product 1",
-          recommended_order_quantity: 50,
-          minimum_stock_level: 20,
-          priority: "high",
-          reasoning: "Sales have been consistent with slight growth. Recommend restocking to prepare for upcoming demand."
-        },
-        {
-          product_id: 2,
-          name: "Product 2",
-          recommended_order_quantity: 30,
-          minimum_stock_level: 15,
-          priority: "medium",
-          reasoning: "Sales are declining slightly, but this is likely seasonal. Moderate restocking recommended."
-        }
-      );
-    }
-    
-    return {
-      predictions: mockProducts
-    };
-  }
-  
-  
-  if (promptContent.includes('sales forecast')) {
-    return {
-      forecasts: [
-        {
-          product_id: 1,
-          name: "Product 1",
-          forecasted_months: [
-            { month: "2023-07", quantity: 45, revenue: 2250 },
-            { month: "2023-08", quantity: 50, revenue: 2500 },
-            { month: "2023-09", quantity: 55, revenue: 2750 }
-          ],
-          growth_trend: "Upward",
-          seasonal_factors: "Higher demand expected in Q3 based on historical patterns"
-        }
-      ]
-    };
-  }
-  
-  if (promptContent.includes('business consultant')) {
-    return {
-      inventory_optimization: [
-        {
-          title: "Implement JIT for top products",
-          description: "For the top 20% of products, implement Just-In-Time inventory to reduce carrying costs",
-          priority: "high"
-        }
-      ],
-      sales_enhancement: [
-        {
-          title: "Bundle slow-moving items",
-          description: "Create product bundles that pair fast-selling items with slower-moving inventory",
-          priority: "medium"
-        }
-      ],
-      category_management: [
-        {
-          title: "Expand Electronics Category",
-          description: "Based on growth trends, consider expanding the electronics category with more diverse products",
-          priority: "high"
-        }
-      ],
-      growth_opportunities: [
-        {
-          title: "Seasonal promotion planning",
-          description: "Prepare targeted promotions for upcoming seasonal peaks in the following categories...",
-          priority: "medium"
-        }
-      ]
-    };
-  }
-  
-  
-  return {
-    message: "This is a mock AI response for development purposes",
-    analysis: "The data provided suggests normal operation with no critical issues",
-    recommendations: [
-      "Consider reviewing inventory levels for seasonal adjustments",
-      "Monitor sales trends for Products 3, 7 and 12 which show unusual patterns"
-    ]
-  };
+  throw new Error('Mock responses have been disabled. Please configure a valid OpenAI API key.');
 }
 
 /**
@@ -1594,9 +1608,9 @@ exports.applyStockPredictions = async (req, res) => {
           
           const productSql = `
             SELECT p.id, p.name, p.price, p.supplier_id, s.name as supplier_name
-            FROM products p
+            FROM products p 
             LEFT JOIN suppliers s ON p.supplier_id = s.id
-            WHERE p.id = $1
+            WHERE p.id = $1 and p.is_active = true
           `;
           
           const productResult = await query(productSql, [product_id]);

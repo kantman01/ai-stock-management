@@ -26,10 +26,7 @@ exports.getOrders = async (req, res) => {
       : customer_id;
 
     let sql = `
-      SELECT o.*, c.first_name || ' ' || c.last_name as customer_name,
-      u.first_name || ' ' || u.last_name as created_by_name,
-      (SELECT COUNT(*) FROM order_items WHERE order_id = o.id) as item_count
-      FROM orders o
+      SELECT o.*, c.first_name || ' ' || c.last_name as customer_name, u.first_name || ' ' || u.last_name as created_by_name, (SELECT COUNT(*) FROM order_items WHERE order_id = o.id) as item_count FROM orders o
       LEFT JOIN customers c ON o.customer_id = c.id
       LEFT JOIN users u ON o.created_by = u.id
       WHERE 1=1
@@ -68,6 +65,7 @@ exports.getOrders = async (req, res) => {
     }
 
     const countSql = sql.replace(/SELECT.*FROM/, 'SELECT COUNT(*) FROM');
+    console.log(countSql);
     const countResult = await query(countSql.split('ORDER BY')[0], params);
     const total = parseInt(countResult.rows[0].count);
 
@@ -175,9 +173,10 @@ exports.createOrder = async (req, res) => {
 
       let subTotal = 0;
       let taxTotal = 0;
+      let allItemsHaveStock = true;
 
       const productDetailsPromises = items.map(item =>
-        query('SELECT id, name, price, tax_rate, stock_quantity FROM products WHERE id = $1', [item.product_id])
+        query('SELECT id, name, price, tax_rate, stock_quantity FROM products WHERE id = $1 and is_active = true', [item.product_id])
       );
 
       const productDetailsResults = await Promise.all(productDetailsPromises);
@@ -193,7 +192,8 @@ exports.createOrder = async (req, res) => {
         const product = productResult.rows[0];
 
         if (product.stock_quantity < item.quantity) {
-          throw new Error(`Not enough stock for product ${product.name}`);
+          allItemsHaveStock = false;
+          console.log(`Not enough stock for product ${product.name}. Available: ${product.stock_quantity}, Requested: ${item.quantity}`);
         }
 
         const itemPrice = parseFloat(product.price) * item.quantity;
@@ -204,6 +204,11 @@ exports.createOrder = async (req, res) => {
       }
 
       const totalAmount = subTotal + taxTotal;
+
+      
+      if (allItemsHaveStock) {
+        status = 'approved';
+      }
 
       const orderSql = `
         INSERT INTO orders (
@@ -235,18 +240,23 @@ exports.createOrder = async (req, res) => {
         const productResult = productDetailsResults[i];
         const product = productResult.rows[0];
 
-        const currentStockQuantity = product.stock_quantity;
-        const newStockQuantity = currentStockQuantity - item.quantity;
+        
+        if (product.stock_quantity >= item.quantity) {
+          const currentStockQuantity = product.stock_quantity;
+          const newStockQuantity = currentStockQuantity - item.quantity;
 
-        await query(
-          'UPDATE products SET stock_quantity = stock_quantity - $1, updated_at = NOW() WHERE id = $2',
-          [item.quantity, item.product_id]
-        );
+          await query(
+            'UPDATE products SET stock_quantity = stock_quantity - $1, updated_at = NOW() WHERE id = $2',
+            [item.quantity, item.product_id]
+          );
 
-        await query(
-          'INSERT INTO stock_movements (product_id, type, quantity, previous_quantity, new_quantity, notes, created_by) VALUES ($1, $2, $3, $4, $5, $6, $7)',
-          [item.product_id, 'sale', item.quantity, currentStockQuantity, newStockQuantity, `Order #${orderId}`, req.user?.id || null]
-        );
+          await query(
+            'INSERT INTO stock_movements (product_id, type, quantity, previous_quantity, new_quantity, notes, created_by) VALUES ($1, $2, $3, $4, $5, $6, $7)',
+            [item.product_id, 'sale', item.quantity, currentStockQuantity, newStockQuantity, `Order #${orderId}`, req.user?.id || null]
+          );
+        } else {
+          console.log(`Skipped stock update for product ${product.name} due to insufficient stock.`);
+        }
       }
 
       const itemsPromises = items.map((item, index) => {
@@ -291,6 +301,38 @@ exports.createOrder = async (req, res) => {
       } catch (notifErr) {
         console.error('Error creating order notification:', notifErr);
         
+      }
+
+      
+      if (status.toLowerCase() === 'approved') {
+        try {
+          const previousStatus = 'pending'; 
+          const isNowApproved = true;
+          const wasNotApproved = true;
+          
+          console.log(`Order #${order.id} has been automatically approved - triggering AI analysis`);
+          
+          const aiAnalysisUrl = `${req.protocol}://${req.get('host')}/api/ai/orders/${order.id}/analyze`;
+          console.log(`Calling AI analysis endpoint: ${aiAnalysisUrl}`);
+          
+          axios.post(aiAnalysisUrl, {}, {
+            headers: {
+              'Authorization': req.headers.authorization
+            }
+          }).then(response => {
+            console.log(`AI analysis for order #${order.id} completed successfully:`, response.data);
+          }).catch(err => {
+            console.error(`Error in AI order analysis for order #${order.id}:`, err.message);
+          });
+
+          await triggerNotifications.systemAnnouncementNotification(
+            'Sipariş Otomatik Onaylandı',
+            `Order #${order.id} was automatically approved due to sufficient stock.`,
+            `/orders/${order.id}`
+          );
+        } catch (aiError) {
+          console.error('Error triggering AI analysis for auto-approved order:', aiError);
+        }
       }
 
       const { id } = order;
