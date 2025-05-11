@@ -313,9 +313,6 @@ exports.createProduct = async (req, res) => {
 
       const result = await query(sql, values);
       const productId = result.rows[0].id;
-      console.log(req.user);
-      console.log(isSupplier, req.user.supplierId, stock_quantity);
-      
       
       if (isSupplier && stock_quantity > 0) {
         
