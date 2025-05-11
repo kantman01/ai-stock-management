@@ -67,7 +67,7 @@ exports.getOrders = async (req, res) => {
     const countSql = sql.replace(/SELECT.*FROM/, 'SELECT COUNT(*) FROM');
     console.log(countSql);
     const countResult = await query(countSql.split('ORDER BY')[0], params);
-    const total = parseInt(countResult.rows[0].count);
+    const total = countResult.rows[0] ? parseInt(countResult.rows[0].count) : 0;
 
     sql += ` ORDER BY ${sort_by} ${sort_dir}`;
 
