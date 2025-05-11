@@ -10,10 +10,14 @@
 > ```sh
 > # Install frontend dependencies
 > npm install
+> # Start frontend server
+> npm start
 >
-> # Install backend dependencies
+> # Install backend dependencies (In a different terminal)
 > cd backend
 > npm install
+> # Start backend server
+> npm run dev
 > ```
 
 A comprehensive stock management system with AI-powered insights, customer portal, and supplier integration.
