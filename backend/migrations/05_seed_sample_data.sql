@@ -1,6 +1,3 @@
--- Sample data for AI Stock Management System (no hardcoded IDs)
--- This file inserts 5 records into each main table with realistic values and matching relationships.
-
 -- ROLES
 INSERT INTO roles (code, name, description) VALUES
   ('admin', 'Administrator', 'System administrator'),
