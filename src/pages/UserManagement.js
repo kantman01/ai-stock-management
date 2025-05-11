@@ -145,7 +145,7 @@ const UserManagement = () => {
   };
 
   const handleEditUser = (userId) => {
-    navigate(`/users/edit/${userId}`);
+    navigate(`/users/${userId}`);
   };
 
   const handleDeleteClick = (user) => {

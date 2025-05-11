@@ -291,7 +291,7 @@ const UserForm = () => {
       
       if (isEditMode) {
         
-        response = await apiServices.users.update(id, userData);
+          response = await userService.updateUser(id, userData);
         
         
         if (selectedRoleCode === ROLE_CODES.CUSTOMER && userData.customerId) {

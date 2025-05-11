@@ -152,7 +152,7 @@ const userService = {
 
   updateUser: async (id, userData) => {
     try {
-      const response = await api.put(`/users/profile/${id}`, userData);
+      const response = await api.put(`/users/${id}`, userData);
       return response.data;
     } catch (error) {
       throw error.response?.data || { message: 'Kullanıcı güncelleme başarısız oldu' };

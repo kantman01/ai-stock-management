@@ -118,7 +118,6 @@ exports.createCustomer = async (req, res) => {
       phone,
       address,
       city,
-      state,
       postal_code,
       country,
       company_name,
@@ -183,10 +182,10 @@ exports.createCustomer = async (req, res) => {
       const customerSql = `
         INSERT INTO customers (
           first_name, last_name, email, phone, address, city,
-          state, postal_code, country, company_name, notes, 
-          is_active, created_by, user_id
+           postal_code, country, company_name, notes, 
+          is_active,  user_id
         )
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
         RETURNING *
       `;
 
@@ -197,13 +196,11 @@ exports.createCustomer = async (req, res) => {
         phone,
         address,
         city,
-        state,
         postal_code,
         country,
         company_name,
         notes,
         is_active,
-        req.user?.id || null,
         userId
       ];
 
@@ -248,7 +245,6 @@ exports.updateCustomer = async (req, res) => {
       phone,
       address,
       city,
-      state,
       postal_code,
       country,
       company_name,
@@ -360,11 +356,6 @@ exports.updateCustomer = async (req, res) => {
         customerValues.push(city);
       }
 
-      if (state !== undefined) {
-        customerUpdates.push(`state = $${customerParamCount++}`);
-        customerValues.push(state);
-      }
-
       if (postal_code !== undefined) {
         customerUpdates.push(`postal_code = $${customerParamCount++}`);
         customerValues.push(postal_code);
@@ -391,11 +382,6 @@ exports.updateCustomer = async (req, res) => {
       }
 
       customerUpdates.push(`updated_at = NOW()`);
-
-      if (req.user?.id) {
-        customerUpdates.push(`updated_by = $${customerParamCount++}`);
-        customerValues.push(req.user.id);
-      }
 
       if (customerUpdates.length > 0) {
         const sql = `
@@ -467,8 +453,8 @@ exports.deleteCustomer = async (req, res) => {
       if (hasOrders) {
         
         await query(
-          'UPDATE customers SET is_active = false, updated_at = NOW(), updated_by = $1 WHERE id = $2',
-          [req.user?.id || null, id]
+          'UPDATE customers SET is_active = false, updated_at = NOW() WHERE id = $1',
+          [id]
         );
 
         

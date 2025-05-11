@@ -159,19 +159,6 @@ const SupplierStock = () => {
 
   return (
     <Box sx={{ p: 3 }}>
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-        <Typography variant="h5" component="h1" fontWeight="bold">
-          My Inventory
-        </Typography>
-      </Box>
-
-      {/* Information box */}
-      <Paper sx={{ p: 2, mb: 3, backgroundColor: 'info.light', color: 'info.contrastText' }}>
-        <Typography variant="body1">
-          This is your supplier inventory. The stock quantities shown here are separate from the main warehouse inventory.
-          When you add stock here, it becomes available for ordering by the warehouse.
-        </Typography>
-      </Paper>
 
       {/* Search Bar */}
       <Paper sx={{ p: 2, mb: 3 }}>

@@ -188,9 +188,9 @@ exports.createSupplier = async (req, res) => {
         INSERT INTO suppliers (
           name, contact_name, email, phone, address, city,
           state, postal_code, country, tax_id, website, notes,
-          payment_terms, is_active, created_by, user_id
+          payment_terms, is_active, user_id
         )
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
         RETURNING *
       `;
 
@@ -209,7 +209,6 @@ exports.createSupplier = async (req, res) => {
         notes,
         payment_terms,
         is_active,
-        req.user?.id || null,
         userId
       ];
 
@@ -417,11 +416,6 @@ exports.updateSupplier = async (req, res) => {
 
       supplierUpdates.push(`updated_at = NOW()`);
 
-      if (req.user?.id) {
-        supplierUpdates.push(`updated_by = $${supplierParamCount++}`);
-        supplierValues.push(req.user.id);
-      }
-
       if (supplierUpdates.length > 0) {
         const sql = `
           UPDATE suppliers
@@ -492,8 +486,8 @@ exports.deleteSupplier = async (req, res) => {
       if (hasOrders) {
         
         await query(
-          'UPDATE suppliers SET is_active = false, updated_at = NOW(), updated_by = $1 WHERE id = $2',
-          [req.user?.id || null, id]
+          'UPDATE suppliers SET is_active = false, updated_at = NOW() WHERE id = $1',
+          [id]
         );
 
         

@@ -218,12 +218,6 @@ const Sidebar = ({ open, onClose, drawerWidth = 250 }) => {
       permission: null,
     },
     {
-      text: 'My Inventory',
-      icon: <StockMovementIcon />,
-      path: '/stock/supplier-inventory',
-      permission: null,
-    },
-    {
       text: 'Process Orders',
       icon: <OrdersIcon />,
       path: '/supplier-orders',

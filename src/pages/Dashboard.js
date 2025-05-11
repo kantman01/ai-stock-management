@@ -501,29 +501,6 @@ const SupplierDashboard = ({ stats = {}, loading, error, navigate }) => {
   const [stockError, setStockError] = useState(null);
   const { user } = useSelector(state => state.auth);
 
-  useEffect(() => {
-    if (user?.supplierId) {
-      fetchSupplierStock();
-    }
-  }, [user]);
-
-  const fetchSupplierStock = async () => {
-    setStockLoading(true);
-    try {
-      const response = await apiServices.get(`/suppliers/${user.supplierId}/products`, {
-        params: {
-          limit: 5
-        }
-      });
-      setSupplierStock(response.data.data);
-      setStockError(null);
-    } catch (error) {
-      console.error('Error fetching supplier stock:', error);
-      setStockError('Failed to load stock information');
-    } finally {
-      setStockLoading(false);
-    }
-  };
 
   const getStockStatus = (quantity) => {
     if (quantity <= 0) return { label: 'Out of Stock', color: 'error' };
@@ -586,71 +563,14 @@ const SupplierDashboard = ({ stats = {}, loading, error, navigate }) => {
       <Grid container spacing={3}>
         <Grid item xs={12}>
           <Paper>
-            <Box sx={{ p: 2, borderBottom: 1, borderColor: 'divider' }}>
-              <Typography variant="h6" component="h2">
-                Your Inventory
-              </Typography>
-              <Typography variant="body2" color="text.secondary">
-                View and manage your product stock levels
-              </Typography>
-            </Box>
             
-            {stockLoading ? (
-              <Box sx={{ display: 'flex', justifyContent: 'center', p: 3 }}>
-                <CircularProgress />
-              </Box>
-            ) : stockError ? (
-              <Box sx={{ p: 2 }}>
-                <Alert severity="error">{stockError}</Alert>
-              </Box>
-            ) : (
-              <TableContainer>
-                <Table>
-                  <TableHead>
-                    <TableRow>
-                      <TableCell>Product</TableCell>
-                      <TableCell>SKU</TableCell>
-                      <TableCell align="right">Price</TableCell>
-                      <TableCell align="center">Stock Level</TableCell>
-                      <TableCell align="center">Status</TableCell>
-                    </TableRow>
-                  </TableHead>
-                  <TableBody>
-                    {supplierStock.length === 0 ? (
-                      <TableRow>
-                        <TableCell colSpan={5} align="center">No products found</TableCell>
-                      </TableRow>
-                    ) : (
-                      supplierStock.map((product) => {
-                        const stockStatus = getStockStatus(product.supplier_stock_quantity || 0);
-                        return (
-                          <TableRow key={product.id}>
-                            <TableCell>{product.name}</TableCell>
-                            <TableCell>{product.sku}</TableCell>
-                            <TableCell align="right">${parseFloat(product.price).toFixed(2)}</TableCell>
-                            <TableCell align="center">{product.supplier_stock_quantity || 0}</TableCell>
-                            <TableCell align="center">
-                              <Chip 
-                                label={stockStatus.label} 
-                                color={stockStatus.color} 
-                                size="small" 
-                                variant="outlined"
-                              />
-                            </TableCell>
-                          </TableRow>
-                        );
-                      })
-                    )}
-                  </TableBody>
-                </Table>
-              </TableContainer>
-            )}
             
-            <Box sx={{ p: 2, display: 'flex', justifyContent: 'flex-end' }}>
+            <Box sx={{ p: 2, display: 'flex', justifyContent: 'flex-end', width: '100%' }}>
               <Button 
                 variant="outlined" 
+                fullWidth
                 color="primary" 
-                onClick={() => navigate('/stock/supplier-inventory')}
+                onClick={() => navigate('/stock/products')}
               >
                 Manage Inventory
               </Button>
@@ -1298,7 +1218,6 @@ const Dashboard = () => {
   };
   
   const getAIActionTitle = (action) => {
-  console.log("getAIActionTitle action:", action.action_type);
     switch (action.action_type) {
       case 'create_supplier_order':
         return 'AI Created Supplier Order';
@@ -1320,10 +1239,12 @@ const Dashboard = () => {
   const getAIActionDescription = (action) => {
     try {
       if (!action.action_data) return 'No details available';
-      
+      console.log("action.action_type", action.action_type);
       switch (action.action_type) {
         case 'stock_prediction':
           return `AI analyzed stock levels for ${action.action_data.product_name || 'inventory items'} including seasonal patterns and historical trends`;
+        case 'apply_ai_recommendation':
+          return `AI applied a recommendation to ${action.action_data.product_name || 'inventory items'}`;
         case 'restock_recommendation':
           return `AI recommends ordering ${action.action_data.quantity || ''} units of ${action.action_data.product_name || 'products'} based on consumption rate analysis`;
         case 'create_supplier_order':

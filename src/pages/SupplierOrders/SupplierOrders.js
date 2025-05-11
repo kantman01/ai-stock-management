@@ -53,7 +53,6 @@ import {
   Science as ScienceIcon,
   ThumbUp as ApproveIcon,
   Done as DeliveredIcon,
-  QrCodeScanner as BarcodeIcon
 } from '@mui/icons-material';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
@@ -469,15 +468,6 @@ const SupplierOrders = () => {
     } else if (normalizedStatus === SUPPLIER_ORDER_STATUS.SHIPPED) {
       return (
         <Stack direction="row" spacing={1}>
-          <Tooltip title="Scan Barcode">
-            <IconButton
-              color="primary"
-              size="small"
-              onClick={() => handleScanBarcode(id)}
-            >
-              <BarcodeIcon />
-            </IconButton>
-          </Tooltip>
           <Tooltip title="Cancel">
             <IconButton
               color="error"
@@ -648,78 +638,6 @@ const SupplierOrders = () => {
     setOrderItems([]);
   };
 
-  const handleScanBarcode = async (orderId) => {
-    
-    const order = supplierOrders.find(o => o.id === orderId);
-    if (!order) return;
-    
-    setBarcodeDialogOpen(true);
-    
-    
-    if (!selectedOrder || selectedOrder.id !== orderId) {
-      try {
-        setLoading(true);
-        const response = await apiServices.supplierOrders.getById(orderId);
-        setSelectedOrder(response.data);
-        setLoading(false);
-      } catch (error) {
-        console.error('Error fetching order details:', error);
-        setSnackbar({
-          open: true,
-          message: 'Error loading order details for barcode scanning: ' + (error.message || 'Unknown error'),
-          severity: 'error'
-        });
-        setLoading(false);
-      }
-    }
-  };
-
-  const handleBarcodeSubmit = async () => {
-    if (!barcodeInput) {
-      setSnackbar({
-        open: true,
-        message: 'Please enter a barcode to scan',
-        severity: 'warning'
-      });
-      return;
-    }
-    
-    setBarcodeProcessing(true);
-    
-    try {
-      
-      const response = await apiServices.barcode.scanBarcode({ barcode: barcodeInput });
-      
-      setBarcodeResult(response.data);
-      
-      if (response.data.success) {
-        setSnackbar({
-          open: true,
-          message: response.data.message || 'Barcode scanned successfully!',
-          severity: 'success'
-        });
-        
-        
-        fetchSupplierOrders();
-      } else {
-        setSnackbar({
-          open: true,
-          message: response.data.message || 'Error scanning barcode',
-          severity: 'error'
-        });
-      }
-    } catch (error) {
-      console.error('Error scanning barcode:', error);
-      setBarcodeResult(null);
-      setSnackbar({
-        open: true, 
-        message: error.response?.data?.message || 'Error scanning barcode',
-        severity: 'error'
-      });
-    } finally {
-      setBarcodeProcessing(false);
-    }
-  };
   
   const handleCloseBarcodeDialog = () => {
     setBarcodeDialogOpen(false);
@@ -1267,104 +1185,6 @@ const SupplierOrders = () => {
                     (selectedSupplier && filteredProducts.length === 0)}
           >
             Create Order
-          </Button>
-        </DialogActions>
-      </Dialog>
-
-      {/* Add Barcode Scan Dialog */}
-      <Dialog open={barcodeDialogOpen} onClose={handleCloseBarcodeDialog} maxWidth="sm" fullWidth>
-        <DialogTitle>Scan Product Barcode</DialogTitle>
-        <DialogContent>
-          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-            Enter the barcode of a product in this order to mark the order as delivered
-          </Typography>
-          
-          {selectedOrder && (
-            <Box sx={{ mb: 3, mt: 2 }}>
-              <Typography variant="subtitle2" gutterBottom>
-                Order Items (Select a barcode to scan):
-              </Typography>
-              <Paper variant="outlined" sx={{ p: 1, mt: 1, bgcolor: 'background.default' }}>
-                <List dense>
-                  {selectedOrder.items && selectedOrder.items.map((item, index) => (
-                    <ListItem key={index} disablePadding sx={{ py: 0.5 }}>
-                      <ListItemText 
-                        primary={item.product_name}
-                        secondary={
-                          <Button 
-                            size="small" 
-                            onClick={() => setBarcodeInput(item.barcode || '123456789')}
-                            startIcon={<BarcodeIcon fontSize="small" />}
-                            disabled={!item.barcode && !item.product_barcode}
-                          >
-                            {item.barcode || item.product_barcode || '123456789'}
-                          </Button>
-                        }
-                      />
-                    </ListItem>
-                  ))}
-                </List>
-              </Paper>
-            </Box>
-          )}
-          
-          <TextField
-            autoFocus
-            margin="dense"
-            id="barcode"
-            label="Barcode"
-            type="text"
-            fullWidth
-            variant="outlined"
-            value={barcodeInput}
-            onChange={(e) => setBarcodeInput(e.target.value)}
-            disabled={barcodeProcessing}
-            InputProps={{
-              startAdornment: (
-                <InputAdornment position="start">
-                  <BarcodeIcon />
-                </InputAdornment>
-              ),
-            }}
-          />
-          
-          {barcodeResult && (
-            <Box sx={{ mt: 3 }}>
-              <Alert 
-                severity={barcodeResult.success ? 'success' : 'error'}
-                sx={{ mb: 2 }}
-              >
-                {barcodeResult.message}
-              </Alert>
-              
-              {barcodeResult.success && barcodeResult.product && (
-                <Paper variant="outlined" sx={{ p: 2 }}>
-                  <Typography variant="subtitle1" gutterBottom>
-                    Product Information:
-                  </Typography>
-                  <Typography variant="body2">
-                    <strong>Name:</strong> {barcodeResult.product.name}
-                  </Typography>
-                  <Typography variant="body2">
-                    <strong>SKU:</strong> {barcodeResult.product.sku}
-                  </Typography>
-                  <Typography variant="body2">
-                    <strong>Barcode:</strong> {barcodeResult.product.barcode}
-                  </Typography>
-                </Paper>
-              )}
-            </Box>
-          )}
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={handleCloseBarcodeDialog}>Close</Button>
-          <Button 
-            onClick={handleBarcodeSubmit} 
-            variant="contained" 
-            disabled={!barcodeInput || barcodeProcessing}
-            startIcon={barcodeProcessing ? <CircularProgress size={20} /> : <BarcodeIcon />}
-          >
-            {barcodeProcessing ? 'Processing...' : 'Scan Barcode'}
           </Button>
         </DialogActions>
       </Dialog>

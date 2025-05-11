@@ -40,41 +40,29 @@ exports.getProducts = async (req, res) => {
       }
     }
 
-    let sql = `
-      SELECT p.*, c.name as category_name, s.name as supplier_name
-    `;
-
-    
+    let selectFields = `p.*, c.name as category_name, s.name as supplier_name`;
     if (isSupplier && supplierIdFromUser) {
-      sql += `,
-        COALESCE(ss.stock_quantity, 0) as supplier_stock_quantity,
-        COALESCE(ss.min_stock_quantity, p.min_stock_quantity) as supplier_min_stock_quantity
-      `;
+      selectFields += `, COALESCE(ss.stock_quantity, 0) as supplier_stock_quantity, COALESCE(ss.min_stock_quantity, p.min_stock_quantity) as supplier_min_stock_quantity`;
     }
 
-    sql += `
+    // Build FROM/JOIN/WHERE as a separate string
+    let fromJoinWhere = `
       FROM products p
       LEFT JOIN categories c ON p.category_id = c.id
       LEFT JOIN suppliers s ON p.supplier_id = s.id
     `;
-
-    
     if (isSupplier && supplierIdFromUser) {
-      sql += `
+      fromJoinWhere += `
         LEFT JOIN supplier_stock ss ON p.id = ss.product_id AND ss.supplier_id = ${supplierIdFromUser}
       `;
     }
-
-    sql += ` WHERE 1=1 AND p.is_active = true`;
-
+    fromJoinWhere += ` WHERE 1=1 AND p.is_active = true`;
     const params = [];
-
     if (isSupplier && supplierIdFromUser) {
-      sql += ` AND p.supplier_id = $${params.length + 1}`;
+      fromJoinWhere += ` AND p.supplier_id = $${params.length + 1}`;
       params.push(supplierIdFromUser);
     } else if (isAdmin && !show_all_supplier_products) {
-      
-      sql += ` AND (
+      fromJoinWhere += ` AND (
         EXISTS (
           SELECT 1 FROM supplier_order_items soi
           JOIN supplier_orders so ON soi.supplier_order_id = so.id
@@ -82,16 +70,11 @@ exports.getProducts = async (req, res) => {
         )
       )`;
     }
-
-    
     if (isCustomer) {
-      
-      sql += ` AND p.stock_quantity > 0`;
+      fromJoinWhere += ` AND p.stock_quantity > 0`;
     }
-    
-    
     if (has_been_ordered === 'true') {
-      sql += ` AND (
+      fromJoinWhere += ` AND (
         EXISTS (
           SELECT 1 FROM order_items oi
           JOIN orders o ON oi.order_id = o.id
@@ -99,67 +82,56 @@ exports.getProducts = async (req, res) => {
         )
       )`;
     }
-
     if (category_id) {
-      sql += ` AND p.category_id = $${params.length + 1}`;
+      fromJoinWhere += ` AND p.category_id = $${params.length + 1}`;
       params.push(category_id);
     }
-
     if (search) {
-      sql += ` AND (
+      fromJoinWhere += ` AND (
         p.name ILIKE $${params.length + 1} OR
         p.sku ILIKE $${params.length + 1} OR
         p.barcode ILIKE $${params.length + 1}
       )`;
       params.push(`%${search}%`);
     }
-
     if (in_stock === 'true') {
-      
       if (isSupplier) {
-        sql += ` AND COALESCE(ss.stock_quantity, 0) > 0`;
+        fromJoinWhere += ` AND COALESCE(ss.stock_quantity, 0) > 0`;
       } else {
-        sql += ` AND p.stock_quantity > 0`;
+        fromJoinWhere += ` AND p.stock_quantity > 0`;
       }
     }
-
     if (min_stock !== undefined) {
       if (isSupplier) {
-        sql += ` AND COALESCE(ss.stock_quantity, 0) >= $${params.length + 1}`;
+        fromJoinWhere += ` AND COALESCE(ss.stock_quantity, 0) >= $${params.length + 1}`;
       } else {
-        sql += ` AND p.stock_quantity >= $${params.length + 1}`;
+        fromJoinWhere += ` AND p.stock_quantity >= $${params.length + 1}`;
       }
       params.push(min_stock);
     }
-
     if (max_stock !== undefined) {
       if (isSupplier) {
-        sql += ` AND COALESCE(ss.stock_quantity, 0) <= $${params.length + 1}`;
+        fromJoinWhere += ` AND COALESCE(ss.stock_quantity, 0) <= $${params.length + 1}`;
       } else {
-        sql += ` AND p.stock_quantity <= $${params.length + 1}`;
+        fromJoinWhere += ` AND p.stock_quantity <= $${params.length + 1}`;
       }
       params.push(max_stock);
     }
-
     if (supplier_id) {
-      sql += ` AND p.supplier_id = $${params.length + 1}`;
+      fromJoinWhere += ` AND p.supplier_id = $${params.length + 1}`;
       params.push(supplier_id);
     }
 
-    
-    
-    let countSelect = "p.*, c.name as category_name, s.name as supplier_name";
-    if (isSupplier && supplierIdFromUser) {
-      countSelect += ", COALESCE(ss.stock_quantity, 0) as supplier_stock_quantity, COALESCE(ss.min_stock_quantity, 0) as supplier_min_stock_quantity";
-    }
-    const countSql = sql.replace(countSelect, "COUNT(*)");
-    const countResult = await query(countSql, params);
-    const total = parseInt(countResult.rows[0].count);
-
-    
+    // Data query
+    let sql = `SELECT ${selectFields} ${fromJoinWhere}`;
     sql += ` ORDER BY ${sort_by} ${sort_dir}`;
     sql += ` LIMIT $${params.length + 1} OFFSET $${params.length + 2}`;
     params.push(parseInt(limit), parseInt(offset));
+
+    // Count query
+    const countSql = `SELECT COUNT(*) ${fromJoinWhere}`;
+    const countResult = await query(countSql, params.slice(0, params.length - 2));
+    const total = parseInt(countResult.rows[0].count);
 
     const result = await query(sql, params);
 
@@ -341,6 +313,7 @@ exports.createProduct = async (req, res) => {
 
       const result = await query(sql, values);
       const productId = result.rows[0].id;
+      console.log(req.user);
       console.log(isSupplier, req.user.supplierId, stock_quantity);
       
       

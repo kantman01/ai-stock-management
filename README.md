@@ -1,5 +1,25 @@
 # AI Stock Management System
 
+> **Quick Setup**
+>
+> **Requirements:**
+> - Node.js (v14 or higher)
+> - npm (v6 or higher)
+> - (Optional, if you use Python scripts) Python 3.8+
+>
+> **Setup Commands:**
+> ```sh
+> # Install frontend dependencies
+> npm install
+>
+> # If you have Python dependencies, install them (uncomment if needed)
+> # pip install -r requirements.txt
+>
+> # Install backend dependencies
+> cd backend
+> npm install
+> ```
+
 A comprehensive stock management system with AI-powered insights, customer portal, and supplier integration.
 
 ## Features
