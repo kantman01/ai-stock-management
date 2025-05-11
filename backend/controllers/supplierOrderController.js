@@ -453,7 +453,24 @@ exports.completeSupplierOrder = async (req, res) => {
         const updateResult = await query(updateProductSql, [finalQuantity, item.product_id]);
         const updatedProduct = updateResult.rows[0];
 
-        
+        // --- SUPPLIER STOCK DECREASE ---
+        const supplierStockResult = await query(
+          'SELECT stock_quantity FROM supplier_stock WHERE supplier_id = $1 AND product_id = $2 FOR UPDATE',
+          [order.supplier_id, item.product_id]
+        );
+        if (supplierStockResult.rows.length === 0) {
+          throw new Error(`Supplier stock not found for product ${item.product_id}`);
+        }
+        const supplierCurrentStock = parseInt(supplierStockResult.rows[0].stock_quantity);
+        if (supplierCurrentStock < finalQuantity) {
+          throw new Error(`Supplier does not have enough stock for product ${item.product_id}`);
+        }
+        await query(
+          'UPDATE supplier_stock SET stock_quantity = stock_quantity - $1, updated_at = NOW() WHERE supplier_id = $2 AND product_id = $3',
+          [finalQuantity, order.supplier_id, item.product_id]
+        );
+        // --- END SUPPLIER STOCK DECREASE ---
+
         const movementSql = `
           INSERT INTO stock_movements (
             product_id, type, quantity, notes, created_by, 
