@@ -1,7 +1,9 @@
 import axios from 'axios';
 
+//axios.create(...): Axios’la özel bir istemci (api) tanımlıyorsun.
+
 const api = axios.create({
-  baseURL: process.env.REACT_APP_API_URL || 'http://localhost:5001/api',
+  baseURL: process.env.REACT_APP_API_URL || 'http://localhost:5001/api', //baseURL: .env dosyasındaki API URL’ini kullanıyor, yoksa localhost.
   headers: {
     'Content-Type': 'application/json'
   }
@@ -20,7 +22,7 @@ api.interceptors.request.use(
     if (token) {
       config.headers['Authorization'] = `Bearer ${token}`;
     }
-    return config;
+    return config; //Yani login olduktan sonra tüm istekler otomatik olarak JWT ile gönderilir.
   },
   (error) => {
     return Promise.reject(error);
@@ -56,7 +58,7 @@ api.interceptors.response.use(
   }
 );
 
-const authService = {
+const authService = { //authService.login() fonksiyonu çağrıldığında aslında: POST /api/auth/login isteği gider.
 
   login: async (email, password, userType = 'staff') => {
     try {
@@ -187,7 +189,8 @@ const userService = {
   }
 };
 
-const apiServices = {
+const apiServices = { //Projede modülerlik sağlar. Kodun her yerinde ayrı ayrı axios yazmana gerek kalmaz. 
+// Servis fonksiyonları tek yerden merkezi kontrol edilir.
 
   users: userService,
 

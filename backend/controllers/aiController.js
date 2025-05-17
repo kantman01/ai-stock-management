@@ -1,6 +1,6 @@
-const { query } = require('../config/db');
-const axios = require('axios');
-require('dotenv').config();
+const { query } = require('../config/db'); // Bu fonksiyon, veritabanı üzerinde SQL sorguları çalıştırmak için kullanılır.
+const axios = require('axios'); // HTTP istekleri için axios modülü kullanılır, OpenAI API’ye istek atmak için axios kullanılır.
+require('dotenv').config(); // Ortam değişkenlerini .env dosyasından alabilmek için dotenv paketi çağrılır.
 const notificationController = require('./notificationController');
 const triggerNotifications = require('../utils/triggerNotifications');
 
@@ -13,6 +13,7 @@ if (process.env.OPENAI_API_KEY) {
   console.log(`    Key starts with: ${process.env.OPENAI_API_KEY.substring(0, 3)}... and is ${process.env.OPENAI_API_KEY.length} characters long`);
 }
 
+//Bu kısım sadece geliştiricinin doğru yapılandırmayı kontrol etmesi içindir.
 
 const DEVELOPMENT_MODE = process.env.NODE_ENV === 'development';
 const USE_MOCK_DATA = process.env.USE_MOCK_DATA === 'true' || false;
@@ -23,7 +24,10 @@ console.log(`[DEBUG] Using mock data: ${USE_MOCK_DATA}`);
 
 const OPENAI_API_KEY = USE_MOCK_DATA ? null : process.env.OPENAI_API_KEY;
 const OPENAI_MODEL = process.env.OPENAI_MODEL || 'gpt-4o-mini';
-const OPENAI_API_URL = 'https://api.openai.com/v1/chat/completions';
+const OPENAI_API_URL = 'https://api.openai.com/v1/chat/completions'; 
+
+// OpenAI API'nin uç noktası (endpoint) tanımlanır.
+//Bu URL daha sonra axios.post(OPENAI_API_URL, {...}) gibi fonksiyonlarla kullanılır.
 
 
 const headers = { 
@@ -43,9 +47,12 @@ exports.getStockPredictions = async (req, res) => {
     const isCronJob = !req;
     
     
-    const useCache = req?.query?.useCache === 'true';
+    const useCache = req?.query?.useCache === 'true'; 
+    // İstek parametrelerinde 'useCache' true ise, önbelleği kullan.
+
     
-    if (useCache) {
+    if (useCache) { 
+    // En son kaydedilen AI tahminini veritabanından al.
       
       const cacheSql = `
         SELECT response_data, created_at
@@ -67,7 +74,7 @@ exports.getStockPredictions = async (req, res) => {
       }
     }
     
-    
+     // Düşük stoklu ürünleri analiz etmek için SQL sorgusu.
     const stockAnalysisSql = `
       SELECT 
         p.id, 
@@ -96,6 +103,9 @@ exports.getStockPredictions = async (req, res) => {
       LIMIT 20
     `;
     
+//Bu sorgu, aktif ürünler arasından stok seviyesi minimum stok seviyesinin iki katından az olan ve en az bir siparişi bulunan ürünleri seçer.
+//Ayrıca, her ürün için bekleyen sipariş miktarı da hesaplanır.
+
     const stockResult = await query(stockAnalysisSql);
     
     if (stockResult.rows.length === 0) {
@@ -105,7 +115,7 @@ exports.getStockPredictions = async (req, res) => {
       });
     }
 
-    
+    // Seçilen ürünlerin geçmiş satış verilerini almak için SQL sorgusu.
     const productIds = stockResult.rows.map(p => p.id);
     const historySql = `
       SELECT oi.product_id, 
@@ -121,7 +131,8 @@ exports.getStockPredictions = async (req, res) => {
     
     const historyResult = await query(historySql, [productIds]);
     
-    
+    // Geçen ve bu yılın aynı ayına ait sezonluk satış verilerini almak için SQL sorgusu.
+
     const currentMonth = new Date().getMonth() + 1; 
     const currentYear = new Date().getFullYear();
     
@@ -146,6 +157,9 @@ exports.getStockPredictions = async (req, res) => {
     
     
     const products = stockResult.rows.map(product => {
+
+            // Ürünün satış geçmişini filtrele.
+
       const salesHistory = historyResult.rows
         .filter(row => row.product_id === product.id)
         .map(row => ({
@@ -153,7 +167,8 @@ exports.getStockPredictions = async (req, res) => {
           quantity_sold: parseInt(row.quantity_sold)
         }));
       
-      
+            // Ürünün sezonluk verilerini filtrele.
+
       const seasonalData = seasonalResult.rows
         .filter(row => row.product_id === product.id)
         .map(row => ({
@@ -161,7 +176,9 @@ exports.getStockPredictions = async (req, res) => {
           year: parseInt(row.year),
           quantity_sold: parseInt(row.quantity_sold)
         }));
-      
+
+            // Yıl bazında büyüme oranını hesapla.
+
       
       let yearOverYearGrowth = null;
       const lastYearSales = seasonalData.find(d => d.year === currentYear - 1 && d.month === currentMonth);
@@ -170,22 +187,24 @@ exports.getStockPredictions = async (req, res) => {
       if (lastYearSales && thisYearSales) {
         yearOverYearGrowth = (thisYearSales.quantity_sold - lastYearSales.quantity_sold) / lastYearSales.quantity_sold;
       }
-      
+            // Etkili stok miktarını hesapla.
+
       const effectiveStock = parseInt(product.stock_quantity) + parseInt(product.pending_order_quantity || 0);
       
       return {
-        ...product,
-        effective_stock: effectiveStock,
-        pending_orders: parseInt(product.pending_order_quantity || 0),
-        sales_history: salesHistory,
-        seasonal_data: seasonalData,
-        year_over_year_growth: yearOverYearGrowth,
+        ...product, // Ürünün veritabanından gelen tüm mevcut bilgilerini taşı.
+        effective_stock: effectiveStock, // Yukarıda hesapladığımız erişilebilir stok.
+        pending_orders: parseInt(product.pending_order_quantity || 0), // Bekleyen sipariş adedi.
+        sales_history: salesHistory, // Bu ürünün son 12 aydaki aylık satış verisi (tarih + adet).
+        seasonal_data: seasonalData, // Bu ürünün son 12 aydaki aylık satış verisi (tarih + adet).
+        year_over_year_growth: yearOverYearGrowth, // Bu ürünün son 12 aydaki aylık satış verisi (tarih + adet).
         current_month: currentMonth,
         current_year: currentYear
       };
     });
 
-    
+        // AI modeline gönderilecek prompt hazırlanır.
+
     const prompt = {
       role: "system",
       content: `You are an AI inventory management assistant helping to predict stock needs. 
@@ -235,7 +254,8 @@ exports.getStockPredictions = async (req, res) => {
       current_stock: stockResult.rows
     }, aiResponse);
     
-    
+    //Bu işlem, yapılan AI çağrısını (prompt, veri, sonuç) ai_interactions tablosuna log olarak kaydeder.
+
     await saveAIAction('stock_prediction', {
       summary: `Analyzed ${products.length} products for stock levels`,
       predictions: aiResponse.predictions ? 
@@ -245,7 +265,8 @@ exports.getStockPredictions = async (req, res) => {
           aiResponse.predictions.filter(p => p.priority === 'high' || p.priority === 'urgent').length : 0) : 0
     });
     
-    
+    //AI’ın yaptığı tahmine dair özet bilgi ai_actions tablosuna kaydediliyor.
+
     if (aiResponse.predictions) {
       const predictions = Array.isArray(aiResponse.predictions) ? 
         aiResponse.predictions : [aiResponse.predictions];
@@ -266,7 +287,8 @@ exports.getStockPredictions = async (req, res) => {
         });
       }
     }
-    
+
+    //“Bu ürünün stoğu çok düşük, acil ilgilenin” bildirimini gösteriyor.
     
     await triggerNotifications.systemAnnouncementNotification(
       'AI Stock Predictions Ready',
@@ -274,6 +296,8 @@ exports.getStockPredictions = async (req, res) => {
       '/ai-analytics'
     );
     
+    //“AI analizini yaptı, şu kadar ürünle ilgili öneride bulundu.”
+    //Bu bildirim, ai-analytics sayfasına yönlendirir.
     
     if (isCronJob) {
       return {
@@ -305,6 +329,7 @@ exports.getStockPredictions = async (req, res) => {
 /**
  * Get sales forecasts for specific products or categories
  */
+
 exports.getSalesForecasts = async (req, res) => {
   try {
     
@@ -312,8 +337,12 @@ exports.getSalesForecasts = async (req, res) => {
     const params = req ? req.query : {};
     const { product_id, category_id, period = '3_months', useCache = 'true' } = params;
     
+    //API’ye gelen istekten ürün ID’si, kategori ID’si, tahmin dönemi (varsayılan: 3 ay), önbellek (cache) kullanımı alınır.
+
     if (useCache === 'true') {
       
+    //Daha önce aynı ürün/kategori için yapılan tahminler varsa ve hala geçerliyse, bunları DB’den getirip yeniden işlem yapmadan döner.
+
       let cacheSql = `
         SELECT response_data, created_at
         FROM ai_interactions
@@ -371,6 +400,8 @@ exports.getSalesForecasts = async (req, res) => {
       GROUP BY p.id, p.name, p.sku, c.name, DATE_TRUNC('month', o.created_at)
       ORDER BY p.id, month
     `;
+
+    //Her bir ürün için, son 12 ayın aylık satış adedi ve gelir bilgisi toplanır.
     
     const salesResult = await query(salesSql, queryParams);
     
@@ -394,7 +425,8 @@ exports.getSalesForecasts = async (req, res) => {
       });
     });
     
-    
+    //Her ürün için monthly_sales adında bir dizi oluşturuluyor ve her ayın satış bilgisi bu dizide tutuluyor.
+
     const recurringOrdersSql = `
       SELECT 
         p.id as product_id,
@@ -419,6 +451,10 @@ exports.getSalesForecasts = async (req, res) => {
       ORDER BY months_count DESC, total_quantity DESC
     `;
     
+
+    //Aynı müşterinin aynı ürünü belli bir düzenle sipariş edip etmediği analiz edilir.
+
+
     const recurringOrdersResult = await query(recurringOrdersSql);
     
     
@@ -473,6 +509,8 @@ exports.getSalesForecasts = async (req, res) => {
       products: products,
       forecast_period: period === '3_months' ? 3 : 6
     });
+
+    //OpenAI ile Tahmin Alınır.
     
     if (!aiResponse) {
       return res.status(500).json({ 
@@ -487,7 +525,8 @@ exports.getSalesForecasts = async (req, res) => {
       period: period
     }, aiResponse);
     
-    
+    //AI’nin cevabı ai_interactions tablosuna kaydedilir.
+
     await triggerNotifications.systemAnnouncementNotification(
       'AI Sales Forecasts Ready',
       `AI has generated sales forecasts for the next ${period === '3_months' ? '3' : '6'} months.`,
@@ -525,6 +564,7 @@ exports.getSalesForecasts = async (req, res) => {
 /**
  * Get AI recommendations for business optimization
  */
+
 exports.getRecommendations = async (req, res) => {
   try {
     
@@ -540,7 +580,10 @@ exports.getRecommendations = async (req, res) => {
         ORDER BY created_at DESC
         LIMIT 1
       `;
-      
+
+      //Eğer useCache=true ise, daha önce oluşturulmuş en güncel yapay zeka çıktısı veritabanından çekilir ve API yanıtı olarak döndürülür.
+      //Bu, her seferinde OpenAI API'yi çağırmaktan tasarruf sağlar.
+
       const cacheResult = await query(cacheSql);
       
       if (cacheResult.rows.length > 0) {
@@ -568,6 +611,8 @@ exports.getRecommendations = async (req, res) => {
       GROUP BY c.name
       ORDER BY total_revenue DESC
     `;
+     
+    //Hangi kategorilerin en çok satış yaptığını tespit etmek.
     
     const recentSalesResult = await query(recentSalesSql);
     
@@ -578,6 +623,8 @@ exports.getRecommendations = async (req, res) => {
       WHERE stock_quantity < 10 and is_active = true
     `;
     
+    //Kritik stok seviyesini görmek.
+
     const lowStockResult = await query(lowStockSql);
     
     
@@ -594,6 +641,8 @@ exports.getRecommendations = async (req, res) => {
       ORDER BY quantity_sold DESC
       LIMIT 10
     `;
+
+    //Popüler ürünleri analiz etmek.
     
     const popularProductsResult = await query(popularProductsSql);
     
@@ -604,6 +653,7 @@ exports.getRecommendations = async (req, res) => {
       popular_products: popularProductsResult.rows
     };
     
+    //Yapay zekaya gönderilecek işletme özet verisi oluşturulur.
     
     const prompt = {
       role: "system",
@@ -681,6 +731,7 @@ exports.getRecommendations = async (req, res) => {
 /**
  * Process a stock order after a product sale
  */
+
 exports.processStockOrder = async (req, res) => {
   try {
     const { order_id } = req.params;
@@ -713,6 +764,8 @@ exports.processStockOrder = async (req, res) => {
     `;
     
     const orderResult = await query(orderSql, [order_id]);
+
+    //Sipariş verisini çek.
     
     if (orderResult.rows.length === 0) {
       console.log(`[ERROR] Order #${order_id} not found for AI analysis`);
@@ -869,6 +922,7 @@ exports.processStockOrder = async (req, res) => {
 /**
  * Run scheduled inventory analysis (for cron job)
  */
+
 exports.runScheduledInventoryAnalysis = async (req, res) => {
   try {
     
@@ -895,6 +949,8 @@ exports.runScheduledInventoryAnalysis = async (req, res) => {
       LEFT JOIN categories c ON p.category_id = c.id
       ORDER BY p.stock_quantity ASC
     `;
+
+    //Veritabanından stok verilerini çek.
     
     const inventoryResult = await query(inventorySql);
     
@@ -909,6 +965,7 @@ exports.runScheduledInventoryAnalysis = async (req, res) => {
       };
     });
     
+    //Her ürün için etkili stok hesaplanır. Mevcut stok + Bekleyen sipariş.
     
     const prompt = {
       role: "system",
@@ -953,15 +1010,14 @@ exports.runScheduledInventoryAnalysis = async (req, res) => {
         aiResponse.critical_restock_needed.length > 0) {
       orderResults = await processUrgentRestockRecommendations(aiResponse.critical_restock_needed);
     }
-    
+
+    //AI'nın kritik gördüğü ürünler için otomatik olarak supplier_orders ve supplier_order_items tablolarına sipariş açılır.
     
     await triggerNotifications.systemAnnouncementNotification(
       'AI Inventory Analysis Completed',
       'AI has completed a scheduled analysis of your inventory.',
       '/ai-action-history'
     );
-    
-    
     
     
     if (!res) return;
@@ -985,6 +1041,7 @@ exports.runScheduledInventoryAnalysis = async (req, res) => {
 /**
  * Create a supplier order based on AI recommendation
  */
+
 async function processUrgentRestockRecommendations(recommendations) {
   try {
     console.log(`[INFO] Processing urgent restock recommendations:`, 
@@ -1016,6 +1073,8 @@ async function processUrgentRestockRecommendations(recommendations) {
         return [];
       }
     }
+
+    //Gelen Veriyi İşleme.
     
     console.log(`[INFO] Found ${itemsToProcess.length} items to evaluate for restocking`);
     
@@ -1025,6 +1084,7 @@ async function processUrgentRestockRecommendations(recommendations) {
       (item.product_id || item.id) 
     );
     
+    //Öncelik Filtrelemesi.
     
     if (urgentItems.length === 0) {
       console.log('[INFO] No urgent/high priority items found. Checking for medium priority items.');
@@ -1062,6 +1122,7 @@ async function processUrgentRestockRecommendations(recommendations) {
     const productIds = urgentItems.map(item => item.product_id);
     console.log(`[INFO] Urgent product IDs:`, productIds);
     
+    //Ürünleri Normalize Etme.
     
     console.log('[INFO] Fetching supplier information from products table');
     const supplierSql = `
@@ -1077,6 +1138,8 @@ async function processUrgentRestockRecommendations(recommendations) {
         p.id = ANY($1) AND p.supplier_id IS NOT NULL
     `;
     
+  //AI’nin önerdiği ürünlerin hangi tedarikçiye ait olduğunu çeker.
+
     const supplierResult = await query(supplierSql, [productIds]);
     console.log(`[INFO] Found supplier information for ${supplierResult.rows.length} products`);
     
@@ -1090,7 +1153,7 @@ async function processUrgentRestockRecommendations(recommendations) {
     }
     
     
-    const supplierGroups = {};
+    const supplierGroups = {}; //Ürünleri tedarikçiye göre gruplayarak supplierGroups nesnesine atar.
     
     supplierResult.rows.forEach(product => {
       if (!supplierGroups[product.supplier_id]) {
@@ -1531,6 +1594,7 @@ exports.getLatestAnalytics = async (req, res) => {
 /**
  * Apply AI suggested minimum stock levels and create orders if needed
  */
+
 exports.applyStockPredictions = async (req, res) => {
   try {
     const { predictions, predictionId } = req.body;
@@ -1557,12 +1621,16 @@ exports.applyStockPredictions = async (req, res) => {
       }
     }
 
+    //Eğer predictionId verilmişse, bu ID'ye ait orijinal AI çıktısını veritabanından çeker.
+
+
     const results = {
       updated_products: [],
       created_orders: [],
       errors: []
     };
     
+   //Tahminler üzerinde yapılan işlemleri ayrı ayrı loglamak ve UI'a dönmek için sonuç nesnesi hazırlanır.
     
     for (const prediction of predictions) {
       try {
@@ -1572,6 +1640,8 @@ exports.applyStockPredictions = async (req, res) => {
           recommended_order_quantity,
           priority 
         } = prediction;
+
+        //Her tahmin için sırayla işlemler yapılır.
         
         if (!product_id) {
           results.errors.push({
@@ -1601,7 +1671,9 @@ exports.applyStockPredictions = async (req, res) => {
           }
         }
         
-        
+        //Eğer minimum stok seviyesi belirlenmişse, ürün tablosunda bu alan güncellenir.
+        //Güncellenen ürün, updated_products listesine eklenir.
+
         if (recommended_order_quantity && recommended_order_quantity > 0 && 
             (priority === 'high' || priority === 'urgent')) {
           
@@ -1613,6 +1685,8 @@ exports.applyStockPredictions = async (req, res) => {
             WHERE p.id = $1 and p.is_active = true
           `;
           
+        //Ürün ve bağlı tedarikçiyi getirir.
+
           const productResult = await query(productSql, [product_id]);
           
           if (productResult.rows.length === 0) {
@@ -1654,7 +1728,9 @@ exports.applyStockPredictions = async (req, res) => {
             'Created from AI prediction application',
             req.user ? req.user.id : null
           ]);
-          
+
+          //Tedarikçiye pending (beklemede) durumunda yeni bir sipariş oluşturur.
+
           const orderId = orderResult.rows[0].id;
           
           
@@ -1672,7 +1748,8 @@ exports.applyStockPredictions = async (req, res) => {
             unitPrice,
             totalPrice
           ]);
-          
+
+          //Yeni oluşturulan siparişe, ürün ve miktarı sipariş kalemi olarak eklenir.
           
           results.created_orders.push({
             supplier_order_id: orderId,

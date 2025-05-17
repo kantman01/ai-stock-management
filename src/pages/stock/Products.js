@@ -199,7 +199,8 @@ const Products = () => {
         
         const params = productApiUtils.getListParams(baseParams);
 
-        const response = await api.get('/products', { params });
+        const response = await api.get('/products', { params }); //Axios, bu POST isteğini /api/products adresine yapar
+        //  → backend yukarıda dönen res.status(201).json(product) cevabını alır.
 
         dispatch(fetchStockSuccess(response.data.data));
         setTotalCount(response.data.pagination.total);

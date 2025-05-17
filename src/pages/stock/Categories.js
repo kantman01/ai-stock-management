@@ -32,9 +32,9 @@ import {
   Delete as DeleteIcon
 } from '@mui/icons-material';
 import { useSelector } from 'react-redux';
-import { hasPermission } from '../../utils/roles';
-import { PERMISSIONS } from '../../utils/roles';
-import api from '../../services/api';
+import { hasPermission } from '../../utils/roles'; // Yetki kontrolü için fonksiyonlar
+import { PERMISSIONS } from '../../utils/roles'; // Yetki kontrolü için fonksiyonlar
+import api from '../../services/api'; // API servis dosyamız (axios içeriyor)
 
 const Categories = () => {
   const { user } = useSelector(state => state.auth);
@@ -49,7 +49,7 @@ const Categories = () => {
   const [currentCategory, setCurrentCategory] = useState(null);
   const [formData, setFormData] = useState({ name: '', description: '', parent_id: '' });
 
-  const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
+  const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' }); //"Snackbar bildirimleri" genellikle kısa süreli, dikkat çekici uyarı mesajlarıdır.
 
   useEffect(() => {
     fetchCategories();

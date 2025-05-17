@@ -41,8 +41,8 @@ import {
   History as HistoryIcon
 } from '@mui/icons-material';
 import { styled } from '@mui/material/styles';
-import { PERMISSIONS, canAccessMenuItem } from '../../utils/permissions';
-import { selectUser, logout } from '../../redux/features/authSlice';
+import { PERMISSIONS, canAccessMenuItem } from '../../utils/permissions'; // Yetkilendirme fonksiyonu ve izin sabitleri
+import { selectUser, logout } from '../../redux/features/authSlice'; // Kullanıcı bilgisini ve çıkış işlemini yöneten Redux slice
 
 const StyledDrawer = styled(Drawer)(({ theme, drawerWidth }) => ({
   width: drawerWidth,

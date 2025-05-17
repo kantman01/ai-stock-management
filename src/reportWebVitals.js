@@ -11,3 +11,5 @@ const reportWebVitals = onPerfEntry => {
 };
 
 export default reportWebVitals;
+
+//create-react-app komutu ile otomatik oluşuyor.

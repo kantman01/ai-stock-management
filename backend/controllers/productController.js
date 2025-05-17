@@ -400,7 +400,7 @@ exports.createProduct = async (req, res) => {
         }
       }
 
-      res.status(201).json(product);
+      res.status(201).json(product); //Burada Backend Cevap Dönüyor.
     } catch (err) {
       await query('ROLLBACK');
       throw err;
@@ -711,7 +711,7 @@ exports.updateProduct = async (req, res) => {
 /**
  * Delete a product
  */
-exports.deleteProduct = async (req, res) => {
+exports.deleteProduct = async (req, res) => { //Buraya product routes üzerinden geliyoruz.
   try {
     const { id } = req.params;
     console.log(id);

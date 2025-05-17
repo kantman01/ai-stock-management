@@ -724,3 +724,6 @@ const Customers = () => {
 };
 
 export default Customers; 
+
+//const response = await api.get('/customers');
+//setCustomers(response.data);

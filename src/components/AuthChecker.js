@@ -2,7 +2,8 @@ import React, { useEffect } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { useLocation } from 'react-router-dom';
 import { getCurrentUser, selectIsLoading } from '../redux/features/authSlice';
-import { CircularProgress, Box } from '@mui/material';
+import { CircularProgress, Box } from '@mui/material'; // Yükleniyor animasyonu için Material UI bileşenleri
+
 
 /**
  * Uygulama başlatıldığında kullanıcının kimlik doğrulama durumunu kontrol eden bileşen.
@@ -18,9 +19,9 @@ const AuthChecker = ({ children }) => {
   const isPublicRoute = publicRoutes.includes(location.pathname);
 
   useEffect(() => {
-    const token = localStorage.getItem('token');
+    const token = localStorage.getItem('token'); // Tarayıcıda token var mı?
     if (token) {
-      dispatch(getCurrentUser());
+      dispatch(getCurrentUser()); // Kullanıcı bilgilerini Redux'a çek
     }
   }, [dispatch]);
 

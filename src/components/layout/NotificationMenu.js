@@ -26,7 +26,7 @@ import {
   Delete as DeleteIcon,
   MarkEmailRead as MarkReadIcon
 } from '@mui/icons-material';
-import { apiServices } from '../../services/api';
+import { apiServices } from '../../services/api'; // API isteklerini yöneten servisleri içe aktar (bildirimleri çekme, okundu işaretleme, silme işlemleri vb.)
 import { format } from 'date-fns';
 
 const NotificationMenu = () => {
@@ -40,10 +40,10 @@ const NotificationMenu = () => {
 
   useEffect(() => {
     
-    fetchNotifications();
+    fetchNotifications(); // Sayfa ilk yüklendiğinde 1 kere çağrılır
 
-    
-    const intervalId = setInterval(fetchNotifications, 60000);
+     
+    const intervalId = setInterval(fetchNotifications, 60000); // 60.000 ms = 60 saniye
 
     return () => clearInterval(intervalId);
   }, []);

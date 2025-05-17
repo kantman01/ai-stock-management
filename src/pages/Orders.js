@@ -81,7 +81,10 @@ const Orders = () => {
   const canManageOrders = hasPermission(user?.role, PERMISSIONS.MANAGE_ORDERS);
   const canCreateOrders = hasPermission(user?.role, PERMISSIONS.CREATE_ORDERS);
 
-  const [orders, setOrders] = useState([]);
+  //Bu sipariş verisi sadece Orders.jsx bileşeninde kullanıldığı için,
+  //Redux gibi global state yönetimine gerek duymadık. useState ve useEffect ile veriyi yönetmek daha sade ve yeterli oluyor.
+  
+  const [orders, setOrders] = useState([]); 
   const [filteredOrders, setFilteredOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
